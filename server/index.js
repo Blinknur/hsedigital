@@ -3,27 +3,25 @@ import express from 'express';
 import cors from 'cors';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
-import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import Stripe from 'stripe';
-import nodemailer from 'nodemailer';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
+import authRoutes from './routes/auth.js';
+import { authenticateToken, tenantContext } from './middleware/auth.js';
 import tenantProvisioningService from './services/tenantProvisioning.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key-change-in-prod';
-const REFRESH_SECRET = process.env.REFRESH_SECRET || 'dev-refresh-secret-key';
 
 // Setup __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -147,78 +145,6 @@ if (!stripe) {
     console.warn("⚠️ STRIPE_SECRET_KEY not found. Payments will be mocked.");
 }
 
-// Initialize Nodemailer
-const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.ethereal.email',
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    auth: {
-        user: process.env.SMTP_USER || 'ethereal.user',
-        pass: process.env.SMTP_PASS || 'ethereal.pass'
-    }
-});
-
-// File Storage Config (Multer)
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir)
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-    cb(null, uniqueSuffix + path.extname(file.originalname))
-  }
-});
-
-const upload = multer({ 
-    storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-    fileFilter: (req, file, cb) => {
-        if (file.mimetype.startsWith('image/')) {
-            cb(null, true);
-        } else {
-            cb(new Error('Only image files are allowed!'));
-        }
-    }
-});
-
-// --- SERVICES (Implementation) ---
-
-// Email Service
-const emailService = {
-    sendMagicLink: async (email, token) => {
-        const link = `${process.env.CLIENT_URL || 'http://localhost:5173'}/#/verify?token=${token}`;
-        console.log(`[EMAIL] Magic Link for ${email}: ${link}`);
-        if (!process.env.SMTP_HOST) return true;
-        try {
-            await transporter.sendMail({
-                from: '"HSE.Digital Security" <security@hse.digital>',
-                to: email,
-                subject: 'Log in to HSE.Digital',
-                html: `<p>Click here to log in: <a href="${link}">Magic Link</a></p>`
-            });
-            return true;
-        } catch (e) {
-            console.error("Email send failed:", e);
-            return false;
-        }
-    },
-    sendAlert: async (email, subject, message) => {
-        console.log(`[EMAIL] Alert to ${email}: ${message}`);
-        if (!process.env.SMTP_HOST) return true;
-        try {
-            await transporter.sendMail({
-                from: '"HSE.Digital Alerts" <alerts@hse.digital>',
-                to: email,
-                subject: subject,
-                text: message,
-                html: `<p>${message}</p>`
-            });
-            return true;
-        } catch (e) {
-            console.error("Email alert failed:", e);
-            return false;
-        }
-    }
-};
 
 // Payment Service
 const paymentService = {
@@ -384,62 +310,6 @@ const featureService = {
 };
 
 // --- Helper: Generate Tokens ---
-const generateTokens = (user) => {
-    const payload = { 
-        id: user.id, 
-        email: user.email, 
-        role: user.role,
-        organizationId: user.organizationId 
-    };
-
-    const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
-    const refreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, { expiresIn: '7d' });
-    return { accessToken, refreshToken };
-};
-
-// --- Middleware: Auth Guard with Tenant Context Extraction ---
-const authenticateToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    if (!token) return res.sendStatus(401);
-
-    jwt.verify(token, JWT_SECRET, (err, decoded) => {
-        if (err) return res.sendStatus(403);
-        
-        // Extract organizationId from JWT payload and inject into request context
-        req.user = {
-            id: decoded.id,
-            email: decoded.email,
-            role: decoded.role,
-            organizationId: decoded.organizationId || null
-        };
-        
-        next();
-    });
-};
-
-// --- Middleware: Tenant Context (Enhanced) ---
-const tenantContext = async (req, res, next) => {
-    const user = req.user;
-    if (!user) return res.status(401).json({ error: 'Authentication required.' });
-
-    // Admin users can optionally specify tenant via x-tenant-id header
-    if (user.role === 'Admin' && !user.organizationId) {
-        req.tenantId = req.headers['x-tenant-id'] || null;
-        return next();
-    }
-    
-    // Regular users must have organizationId from JWT
-    if (!user.organizationId) {
-        return res.status(403).json({ error: 'Access Denied: No Organization Context' });
-    }
-    
-    // Set tenant ID from JWT organizationId
-    req.tenantId = user.organizationId;
-    next();
-};
-
-// --- Middleware: Quota Check ---
 const checkQuota = (resourceType) => {
     return async (req, res, next) => {
         if (!req.tenantId) return next();
@@ -520,6 +390,10 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'online', db: 'connected', mode: process.env.NODE_ENV || 'development' });
 });
 
+
+// AUTH ROUTES
+app.use('/api/auth', authRoutes);
+
 // FILE UPLOAD
 app.post('/api/upload', authenticateToken, upload.single('file'), asyncHandler(async (req, res) => {
     if (!req.file) {
@@ -529,23 +403,6 @@ app.post('/api/upload', authenticateToken, upload.single('file'), asyncHandler(a
     const host = req.get('host');
     const fileUrl = `${protocol}://${host}/uploads/${req.file.filename}`;
     res.json({ url: fileUrl, filename: req.file.filename });
-}));
-
-// AUTH
-app.post('/api/auth/login', asyncHandler(async (req, res) => {
-    const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: "Email and password required" });
-
-    const user = await prisma.user.findUnique({
-        where: { email }
-    });
-
-    if (user && user.password === password) {
-        const tokens = generateTokens(user);
-        const { password: _, ...userInfo } = user;
-        return res.json({ ...tokens, user: userInfo });
-    }
-    return res.status(401).json({ error: "Invalid credentials" });
 }));
 
 // ADMIN SEED

@@ -30,3 +30,13 @@ dist-ssr
 
 # Prisma
 **/node_modules/@prisma/client
+
+# Database
+*.db
+*.db-journal
+prisma.db
+prisma.db-journal
+
+# Build outputs
+build/
+public/uploads/
