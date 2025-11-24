@@ -1,1 +1,201 @@
-u«Z²‹«q
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== RBAC MODELS ====================
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  permissions RolePermission[]
+  userRoles   UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  resource    String
+  action      String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  roles RolePermission[]
+
+  @@unique([resource, action])
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String   @id @default(cuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+// ==================== EXISTING MODELS ====================
+
+model Organization {
+  id               String   @id @default(cuid())
+  name             String
+  ownerId          String
+  subscriptionPlan String   @default("free")
+  ssoConfig        Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  users          User[]
+  stations       Station[]
+  audits         Audit[]
+  incidents      Incident[]
+  contractors    Contractor[]
+  formDefinitions FormDefinition[]
+
+  @@map("organizations")
+}
+
+model User {
+  id                String   @id @default(cuid())
+  name              String
+  email             String   @unique
+  password          String
+  role              String   @default("Station Manager")
+  organizationId    String?
+  region            String?
+  assignedStationIds Json?
+  contractorId      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  audits       Audit[]
+  incidents    Incident[]
+  userRoles    UserRole[]
+
+  @@map("users")
+}
+
+model Station {
+  id              String   @id @default(cuid())
+  organizationId  String
+  name            String
+  brand           String
+  region          String
+  address         String
+  location        Json
+  riskCategory    String   @default("Low")
+  auditFrequency  String   @default("Annually")
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  audits       Audit[]
+  incidents    Incident[]
+
+  @@map("stations")
+}
+
+model Audit {
+  id             String   @id @default(cuid())
+  organizationId String
+  stationId      String
+  auditorId      String
+  auditNumber    String   @unique
+  scheduledDate  DateTime
+  completedDate  DateTime?
+  formId         String
+  status         String   @default("Scheduled")
+  findings       Json
+  overallScore   Float    @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  station      Station      @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  auditor      User         @relation(fields: [auditorId], references: [id], onDelete: Cascade)
+
+  @@map("audits")
+}
+
+model Incident {
+  id             String   @id @default(cuid())
+  organizationId String
+  stationId      String
+  reporterId     String
+  title          String
+  description    String
+  severity       String   @default("Low")
+  status         String   @default("Open")
+  reportedDate   DateTime @default(now())
+  resolvedDate   DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  station      Station      @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  reporter     User         @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@map("incidents")
+}
+
+model Contractor {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  licenseNumber  String
+  specialization String
+  contactPerson  String
+  email          String
+  status         String   @default("Active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("contractors")
+}
+
+model FormDefinition {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  frequency      String
+  schema         Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("form_definitions")
+}

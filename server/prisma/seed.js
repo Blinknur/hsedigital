@@ -58,6 +58,61 @@ const MOCK_FORMS = [
     }
 ];
 
+const RBAC_ROLES = [
+    { id: 'role-admin', name: 'Admin', description: 'Full system access', isSystem: true },
+    { id: 'role-compliance-manager', name: 'Compliance Manager', description: 'Manage audits and compliance across stations', isSystem: true },
+    { id: 'role-station-manager', name: 'Station Manager', description: 'Manage station operations and incidents', isSystem: true },
+    { id: 'role-contractor', name: 'Contractor', description: 'View assigned work and submit reports', isSystem: true },
+    { id: 'role-auditor', name: 'Auditor', description: 'Conduct audits and generate reports', isSystem: true },
+];
+
+const RBAC_PERMISSIONS = [
+    { id: 'perm-1', resource: 'organizations', action: 'read', description: 'View organizations' },
+    { id: 'perm-2', resource: 'organizations', action: 'write', description: 'Create/update organizations' },
+    { id: 'perm-3', resource: 'organizations', action: 'delete', description: 'Delete organizations' },
+    { id: 'perm-4', resource: 'users', action: 'read', description: 'View users' },
+    { id: 'perm-5', resource: 'users', action: 'write', description: 'Create/update users' },
+    { id: 'perm-6', resource: 'users', action: 'delete', description: 'Delete users' },
+    { id: 'perm-7', resource: 'stations', action: 'read', description: 'View stations' },
+    { id: 'perm-8', resource: 'stations', action: 'write', description: 'Create/update stations' },
+    { id: 'perm-9', resource: 'stations', action: 'delete', description: 'Delete stations' },
+    { id: 'perm-10', resource: 'audits', action: 'read', description: 'View audits' },
+    { id: 'perm-11', resource: 'audits', action: 'write', description: 'Create/update audits' },
+    { id: 'perm-12', resource: 'audits', action: 'delete', description: 'Delete audits' },
+    { id: 'perm-13', resource: 'audits', action: 'conduct', description: 'Conduct audits' },
+    { id: 'perm-14', resource: 'incidents', action: 'read', description: 'View incidents' },
+    { id: 'perm-15', resource: 'incidents', action: 'write', description: 'Create/update incidents' },
+    { id: 'perm-16', resource: 'incidents', action: 'delete', description: 'Delete incidents' },
+    { id: 'perm-17', resource: 'contractors', action: 'read', description: 'View contractors' },
+    { id: 'perm-18', resource: 'contractors', action: 'write', description: 'Create/update contractors' },
+    { id: 'perm-19', resource: 'contractors', action: 'delete', description: 'Delete contractors' },
+    { id: 'perm-20', resource: 'forms', action: 'read', description: 'View forms' },
+    { id: 'perm-21', resource: 'forms', action: 'write', description: 'Create/update forms' },
+    { id: 'perm-22', resource: 'forms', action: 'delete', description: 'Delete forms' },
+    { id: 'perm-23', resource: 'reports', action: 'read', description: 'View reports' },
+    { id: 'perm-24', resource: 'reports', action: 'generate', description: 'Generate reports' },
+];
+
+const RBAC_ROLE_PERMISSIONS = {
+    'role-admin': ['perm-1', 'perm-2', 'perm-3', 'perm-4', 'perm-5', 'perm-6', 'perm-7', 'perm-8', 'perm-9', 'perm-10', 'perm-11', 'perm-12', 'perm-13', 'perm-14', 'perm-15', 'perm-16', 'perm-17', 'perm-18', 'perm-19', 'perm-20', 'perm-21', 'perm-22', 'perm-23', 'perm-24'],
+    'role-compliance-manager': ['perm-1', 'perm-4', 'perm-7', 'perm-8', 'perm-10', 'perm-11', 'perm-13', 'perm-14', 'perm-15', 'perm-17', 'perm-20', 'perm-23', 'perm-24'],
+    'role-station-manager': ['perm-7', 'perm-10', 'perm-14', 'perm-15', 'perm-17', 'perm-20', 'perm-23'],
+    'role-contractor': ['perm-7', 'perm-10', 'perm-14', 'perm-17', 'perm-20'],
+    'role-auditor': ['perm-7', 'perm-10', 'perm-11', 'perm-13', 'perm-14', 'perm-20', 'perm-23', 'perm-24'],
+};
+
+const USER_ROLES = [
+    { userId: 'user-admin-1', roleId: 'role-admin' },
+    { userId: 'user-cm-1', roleId: 'role-compliance-manager' },
+    { userId: 'user-cm-2', roleId: 'role-compliance-manager' },
+    { userId: 'user-cm-3', roleId: 'role-compliance-manager' },
+    { userId: 'user-sm-7', roleId: 'role-station-manager' },
+    { userId: 'user-sm-4', roleId: 'role-station-manager' },
+    { userId: 'user-sm-2', roleId: 'role-station-manager' },
+    { userId: 'user-sm-3', roleId: 'role-station-manager' },
+    { userId: 'user-cont-1', roleId: 'role-contractor' },
+];
+
 async function main() {
   console.log('Start seeding ...');
 
@@ -108,6 +163,57 @@ async function main() {
           update: {},
           create: form,
       });
+  }
+
+  // 6. RBAC - Roles
+  for (const role of RBAC_ROLES) {
+    await prisma.role.upsert({
+      where: { id: role.id },
+      update: {},
+      create: role,
+    });
+  }
+
+  // 7. RBAC - Permissions
+  for (const perm of RBAC_PERMISSIONS) {
+    await prisma.permission.upsert({
+      where: { id: perm.id },
+      update: {},
+      create: perm,
+    });
+  }
+
+  // 8. RBAC - Role-Permission mappings
+  for (const [roleId, permissionIds] of Object.entries(RBAC_ROLE_PERMISSIONS)) {
+    for (const permissionId of permissionIds) {
+      await prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId,
+            permissionId
+          }
+        },
+        update: {},
+        create: {
+          roleId,
+          permissionId
+        }
+      });
+    }
+  }
+
+  // 9. RBAC - User-Role assignments
+  for (const userRole of USER_ROLES) {
+    await prisma.userRole.upsert({
+      where: {
+        userId_roleId: {
+          userId: userRole.userId,
+          roleId: userRole.roleId
+        }
+      },
+      update: {},
+      create: userRole
+    });
   }
 
   console.log('Seeding finished.');
