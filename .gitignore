@@ -22,3 +22,14 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# NPM
+package-lock.json
+
+# Redis dumps (if running locally)
+dump.rdb
+*.rdb
+
+# Uploads directory
+server/public/uploads/*
+!server/public/uploads/.gitkeep

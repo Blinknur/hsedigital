@@ -16,6 +16,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
+import { rateLimitMiddleware, getRateLimitStatus, getRateLimitAnalytics } from './rateLimit.js';
 
 dotenv.config();
 
@@ -261,8 +262,12 @@ app.post('/api/admin/seed', asyncHandler(async (req, res) => {
     });
 }));
 
+// --- RATE LIMIT ENDPOINTS ---
+app.get('/api/rate-limit/status', authenticateToken, getRateLimitStatus);
+app.get('/api/rate-limit/analytics', authenticateToken, getRateLimitAnalytics);
+
 // --- STATIONS ---
-app.get('/api/stations', authenticateToken, tenantContext, asyncHandler(async (req, res) => {
+app.get('/api/stations', authenticateToken, rateLimitMiddleware, tenantContext, asyncHandler(async (req, res) => {
     const where = {};
     if (req.tenantId) where.organizationId = req.tenantId;
     if (req.query.region) where.region = req.query.region;
@@ -271,7 +276,7 @@ app.get('/api/stations', authenticateToken, tenantContext, asyncHandler(async (r
 }));
 
 // --- AUDITS ---
-app.get('/api/audits', authenticateToken, tenantContext, asyncHandler(async (req, res) => {
+app.get('/api/audits', authenticateToken, rateLimitMiddleware, tenantContext, asyncHandler(async (req, res) => {
     const where = { organizationId: req.tenantId };
     if (req.query.stationId) where.stationId = req.query.stationId;
     const audits = await prisma.audit.findMany({
@@ -281,7 +286,7 @@ app.get('/api/audits', authenticateToken, tenantContext, asyncHandler(async (req
     res.json(audits);
 }));
 
-app.post('/api/audits', authenticateToken, tenantContext, asyncHandler(async (req, res) => {
+app.post('/api/audits', authenticateToken, rateLimitMiddleware, tenantContext, asyncHandler(async (req, res) => {
     const { stationId, auditorId, scheduledDate, formId } = req.body;
     const audit = await prisma.audit.create({
         data: {
@@ -299,7 +304,7 @@ app.post('/api/audits', authenticateToken, tenantContext, asyncHandler(async (re
     res.status(201).json(audit);
 }));
 
-app.put('/api/audits/:id', authenticateToken, tenantContext, asyncHandler(async (req, res) => {
+app.put('/api/audits/:id', authenticateToken, rateLimitMiddleware, tenantContext, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const updateData = req.body;
     delete updateData.id; 
@@ -311,7 +316,7 @@ app.put('/api/audits/:id', authenticateToken, tenantContext, asyncHandler(async 
 }));
 
 // --- AI ---
-app.post('/api/ai/generate', authenticateToken, tenantContext, asyncHandler(async (req, res) => {
+app.post('/api/ai/generate', authenticateToken, rateLimitMiddleware, tenantContext, asyncHandler(async (req, res) => {
     const { prompt } = req.body;
     if (!prompt) return res.status(400).json({ error: "Prompt is required" });
     try {
