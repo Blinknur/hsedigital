@@ -1,0 +1,235 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id                String   @id @default(cuid())
+  name              String
+  ownerId           String
+  subscriptionPlan  String   @default("free")
+  ssoConfig         Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Stripe fields
+  stripeCustomerId       String?   @unique
+  stripeSubscriptionId   String?   @unique
+  subscriptionStatus     String?   @default("inactive")
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean   @default(false)
+  trialEndsAt            DateTime?
+
+  stations       Station[]
+  users          User[]
+  audits         Audit[]
+  incidents      Incident[]
+  permits        Permit[]
+  contractors    Contractor[]
+  formDefinitions FormDefinition[]
+  usageRecords   UsageRecord[]
+
+  @@index([stripeCustomerId])
+  @@index([stripeSubscriptionId])
+}
+
+model User {
+  id                 String   @id @default(cuid())
+  name               String
+  email              String   @unique
+  password           String
+  role               String
+  organizationId     String?
+  region             String?
+  assignedStationIds String[]
+  contractorId       String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  audits       Audit[]
+  incidents    Incident[]
+  permits      Permit[]
+
+  @@index([organizationId])
+  @@index([email])
+}
+
+model Station {
+  id               String   @id @default(cuid())
+  organizationId   String
+  name             String
+  brand            String
+  region           String
+  address          String
+  location         Json
+  riskCategory     String
+  auditFrequency   String
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  audits       Audit[]
+  incidents    Incident[]
+  permits      Permit[]
+
+  @@index([organizationId])
+}
+
+model Audit {
+  id             String   @id @default(cuid())
+  organizationId String
+  stationId      String
+  auditorId      String
+  auditNumber    String   @unique
+  scheduledDate  DateTime
+  completedDate  DateTime?
+  status         String
+  formId         String
+  findings       Json
+  overallScore   Float
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  station      Station      @relation(fields: [stationId], references: [id])
+  auditor      User         @relation(fields: [auditorId], references: [id])
+
+  @@index([organizationId])
+  @@index([stationId])
+  @@index([auditorId])
+}
+
+model Incident {
+  id             String   @id @default(cuid())
+  organizationId String
+  stationId      String
+  reportedById   String
+  incidentNumber String   @unique
+  title          String
+  description    String
+  severity       String
+  status         String
+  occurredAt     DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  station      Station      @relation(fields: [stationId], references: [id])
+  reportedBy   User         @relation(fields: [reportedById], references: [id])
+
+  @@index([organizationId])
+  @@index([stationId])
+}
+
+model Permit {
+  id              String   @id @default(cuid())
+  organizationId  String
+  stationId       String
+  contractorId    String
+  issuedById      String
+  permitNumber    String   @unique
+  workDescription String
+  startDate       DateTime
+  endDate         DateTime
+  status          String
+  safetyChecklist Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  station      Station      @relation(fields: [stationId], references: [id])
+  contractor   Contractor   @relation(fields: [contractorId], references: [id])
+  issuedBy     User         @relation(fields: [issuedById], references: [id])
+
+  @@index([organizationId])
+  @@index([stationId])
+  @@index([contractorId])
+}
+
+model Contractor {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  licenseNumber  String
+  specialization String
+  contactPerson  String
+  email          String
+  status         String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  permits      Permit[]
+
+  @@index([organizationId])
+}
+
+model FormDefinition {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  frequency      String
+  schema         Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+}
+
+model UsageRecord {
+  id             String   @id @default(cuid())
+  organizationId String
+  resourceType   String   // 'audit', 'incident', 'permit', 'station', 'user', 'api_call'
+  resourceId     String?
+  quantity       Int      @default(1)
+  metadata       Json?
+  recordedAt     DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, resourceType])
+  @@index([recordedAt])
+}
+
+model SubscriptionPlan {
+  id                  String   @id @default(cuid())
+  name                String   @unique
+  stripePriceId       String   @unique
+  stripeProductId     String
+  interval            String   // 'month' or 'year'
+  amount              Int      // in cents
+  currency            String   @default("usd")
+  features            Json
+  limits              Json     // { stations: 10, users: 5, audits_per_month: 100, api_calls_per_day: 1000 }
+  isActive            Boolean  @default(true)
+  trialDays           Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([stripePriceId])
+}
+
+model WebhookEvent {
+  id              String   @id @default(cuid())
+  eventId         String   @unique
+  eventType       String
+  payload         Json
+  processed       Boolean  @default(false)
+  processingError String?
+  createdAt       DateTime @default(now())
+  processedAt     DateTime?
+
+  @@index([eventType, processed])
+  @@index([createdAt])
+}

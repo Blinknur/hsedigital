@@ -16,7 +16,6 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
-import { rateLimitMiddleware, getRateLimitStatus, getRateLimitAnalytics } from './rateLimit.js';
 
 dotenv.config();
 
@@ -160,12 +159,164 @@ const emailService = {
 
 // Payment Service
 const paymentService = {
-    createPortalSession: async (customerId) => {
-        return { url: 'https://billing.stripe.com/p/session/test_123' };
+    createCheckoutSession: async (priceId, orgId, userEmail) => {
+        if (!stripe) {
+            console.log(`[STRIPE MOCK] Creating checkout session for ${priceId}`);
+            return { url: `${process.env.CLIENT_URL || 'http://localhost:5173'}/#/settings?success=true&plan=${priceId}` }; 
+        }
+
+        const organization = await prisma.organization.findUnique({ where: { id: orgId } });
+        
+        let customerId = organization.stripeCustomerId;
+        if (!customerId) {
+            const customer = await stripe.customers.create({
+                email: userEmail,
+                metadata: { organizationId: orgId }
+            });
+            customerId = customer.id;
+            await prisma.organization.update({
+                where: { id: orgId },
+                data: { stripeCustomerId: customerId }
+            });
+        }
+
+        const session = await stripe.checkout.sessions.create({
+            customer: customerId,
+            mode: 'subscription',
+            payment_method_types: ['card'],
+            line_items: [{ price: priceId, quantity: 1 }],
+            success_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}/#/settings?success=true`,
+            cancel_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}/#/settings?canceled=true`,
+            metadata: { organizationId: orgId },
+            subscription_data: {
+                metadata: { organizationId: orgId }
+            }
+        });
+
+        return { url: session.url };
     },
-    createCheckoutSession: async (planId, orgId, userEmail) => {
-         console.log(`[STRIPE] Creating checkout session for ${planId}`);
-         return { url: `${process.env.CLIENT_URL || 'http://localhost:5173'}/#/settings?success=true&plan=${planId}` }; 
+
+    createPortalSession: async (orgId) => {
+        if (!stripe) {
+            return { url: 'https://billing.stripe.com/p/session/test_123' };
+        }
+
+        const organization = await prisma.organization.findUnique({ where: { id: orgId } });
+        if (!organization?.stripeCustomerId) {
+            throw new Error('No Stripe customer found for this organization');
+        }
+
+        const session = await stripe.billingPortal.sessions.create({
+            customer: organization.stripeCustomerId,
+            return_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}/#/settings`
+        });
+
+        return { url: session.url };
+    }
+};
+
+// Usage Tracking Service
+const usageService = {
+    track: async (organizationId, resourceType, resourceId = null, quantity = 1, metadata = null) => {
+        try {
+            await prisma.usageRecord.create({
+                data: {
+                    organizationId,
+                    resourceType,
+                    resourceId,
+                    quantity,
+                    metadata
+                }
+            });
+        } catch (e) {
+            console.error('Usage tracking failed:', e);
+        }
+    },
+
+    getUsage: async (organizationId, resourceType, startDate, endDate) => {
+        const records = await prisma.usageRecord.findMany({
+            where: {
+                organizationId,
+                resourceType,
+                recordedAt: {
+                    gte: startDate,
+                    lte: endDate
+                }
+            }
+        });
+        return records.reduce((sum, record) => sum + record.quantity, 0);
+    }
+};
+
+// Feature Flag Service
+const featureService = {
+    PLAN_LIMITS: {
+        free: {
+            stations: 2,
+            users: 3,
+            audits_per_month: 10,
+            incidents_per_month: 20,
+            permits_per_month: 5,
+            api_calls_per_day: 100,
+            features: ['basic_audits', 'basic_incidents']
+        },
+        pro: {
+            stations: 10,
+            users: 15,
+            audits_per_month: 100,
+            incidents_per_month: 200,
+            permits_per_month: 50,
+            api_calls_per_day: 1000,
+            features: ['basic_audits', 'basic_incidents', 'advanced_reporting', 'api_access', 'email_notifications']
+        },
+        enterprise: {
+            stations: -1,
+            users: -1,
+            audits_per_month: -1,
+            incidents_per_month: -1,
+            permits_per_month: -1,
+            api_calls_per_day: 10000,
+            features: ['basic_audits', 'basic_incidents', 'advanced_reporting', 'api_access', 'email_notifications', 'sso', 'custom_branding', 'priority_support', 'ai_insights']
+        }
+    },
+
+    hasFeature: (plan, feature) => {
+        const planLimits = featureService.PLAN_LIMITS[plan] || featureService.PLAN_LIMITS.free;
+        return planLimits.features.includes(feature);
+    },
+
+    checkLimit: async (organizationId, resourceType) => {
+        const org = await prisma.organization.findUnique({ where: { id: organizationId } });
+        const plan = org?.subscriptionPlan || 'free';
+        const limits = featureService.PLAN_LIMITS[plan];
+
+        const limitKey = `${resourceType}_per_month`;
+        if (!limits[limitKey] || limits[limitKey] === -1) return true;
+
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const usage = await usageService.getUsage(organizationId, resourceType, startOfMonth, now);
+
+        return usage < limits[limitKey];
+    },
+
+    getQuota: async (organizationId, resourceType) => {
+        const org = await prisma.organization.findUnique({ where: { id: organizationId } });
+        const plan = org?.subscriptionPlan || 'free';
+        const limits = featureService.PLAN_LIMITS[plan];
+
+        const limitKey = `${resourceType}_per_month`;
+        const limit = limits[limitKey] || 0;
+
+        if (limit === -1) {
+            return { limit: -1, used: 0, remaining: -1 };
+        }
+
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const used = await usageService.getUsage(organizationId, resourceType, startOfMonth, now);
+
+        return { limit, used, remaining: limit - used };
     }
 };
 
@@ -209,6 +360,54 @@ const tenantContext = async (req, res, next) => {
         return res.status(403).json({ error: 'Access Denied: No Organization Context' });
     }
     req.tenantId = user.organizationId;
+    next();
+};
+
+// --- Middleware: Quota Check ---
+const checkQuota = (resourceType) => {
+    return async (req, res, next) => {
+        if (!req.tenantId) return next();
+        
+        const hasQuota = await featureService.checkLimit(req.tenantId, resourceType);
+        if (!hasQuota) {
+            return res.status(429).json({ 
+                error: 'Quota exceeded', 
+                message: `You have reached your monthly ${resourceType} limit. Please upgrade your plan.`,
+                resourceType 
+            });
+        }
+        next();
+    };
+};
+
+// --- Middleware: Feature Gate ---
+const requireFeature = (feature) => {
+    return async (req, res, next) => {
+        if (!req.tenantId) return next();
+        
+        const org = await prisma.organization.findUnique({ where: { id: req.tenantId } });
+        const plan = org?.subscriptionPlan || 'free';
+        
+        if (!featureService.hasFeature(plan, feature)) {
+            return res.status(403).json({ 
+                error: 'Feature not available', 
+                message: `This feature requires a higher plan. Current plan: ${plan}`,
+                feature,
+                currentPlan: plan
+            });
+        }
+        next();
+    };
+};
+
+// --- Middleware: Track API Calls ---
+const trackApiUsage = async (req, res, next) => {
+    if (req.tenantId && req.path.startsWith('/api/') && req.method !== 'GET') {
+        await usageService.track(req.tenantId, 'api_call', null, 1, { 
+            endpoint: req.path, 
+            method: req.method 
+        });
+    }
     next();
 };
 
@@ -262,12 +461,8 @@ app.post('/api/admin/seed', asyncHandler(async (req, res) => {
     });
 }));
 
-// --- RATE LIMIT ENDPOINTS ---
-app.get('/api/rate-limit/status', authenticateToken, getRateLimitStatus);
-app.get('/api/rate-limit/analytics', authenticateToken, getRateLimitAnalytics);
-
 // --- STATIONS ---
-app.get('/api/stations', authenticateToken, rateLimitMiddleware, tenantContext, asyncHandler(async (req, res) => {
+app.get('/api/stations', authenticateToken, tenantContext, asyncHandler(async (req, res) => {
     const where = {};
     if (req.tenantId) where.organizationId = req.tenantId;
     if (req.query.region) where.region = req.query.region;
@@ -276,7 +471,7 @@ app.get('/api/stations', authenticateToken, rateLimitMiddleware, tenantContext, 
 }));
 
 // --- AUDITS ---
-app.get('/api/audits', authenticateToken, rateLimitMiddleware, tenantContext, asyncHandler(async (req, res) => {
+app.get('/api/audits', authenticateToken, tenantContext, asyncHandler(async (req, res) => {
     const where = { organizationId: req.tenantId };
     if (req.query.stationId) where.stationId = req.query.stationId;
     const audits = await prisma.audit.findMany({
@@ -286,7 +481,7 @@ app.get('/api/audits', authenticateToken, rateLimitMiddleware, tenantContext, as
     res.json(audits);
 }));
 
-app.post('/api/audits', authenticateToken, rateLimitMiddleware, tenantContext, asyncHandler(async (req, res) => {
+app.post('/api/audits', authenticateToken, tenantContext, checkQuota('audit'), asyncHandler(async (req, res) => {
     const { stationId, auditorId, scheduledDate, formId } = req.body;
     const audit = await prisma.audit.create({
         data: {
@@ -301,10 +496,13 @@ app.post('/api/audits', authenticateToken, rateLimitMiddleware, tenantContext, a
             overallScore: 0
         }
     });
+    
+    await usageService.track(req.tenantId, 'audit', audit.id);
+    
     res.status(201).json(audit);
 }));
 
-app.put('/api/audits/:id', authenticateToken, rateLimitMiddleware, tenantContext, asyncHandler(async (req, res) => {
+app.put('/api/audits/:id', authenticateToken, tenantContext, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const updateData = req.body;
     delete updateData.id; 
@@ -315,10 +513,181 @@ app.put('/api/audits/:id', authenticateToken, rateLimitMiddleware, tenantContext
     res.json(updated);
 }));
 
+// --- STRIPE BILLING ---
+app.post('/api/billing/checkout', authenticateToken, tenantContext, asyncHandler(async (req, res) => {
+    const { priceId } = req.body;
+    if (!priceId) return res.status(400).json({ error: 'priceId is required' });
+
+    const result = await paymentService.createCheckoutSession(priceId, req.tenantId, req.user.email);
+    res.json(result);
+}));
+
+app.post('/api/billing/portal', authenticateToken, tenantContext, asyncHandler(async (req, res) => {
+    const result = await paymentService.createPortalSession(req.tenantId);
+    res.json(result);
+}));
+
+app.get('/api/billing/usage', authenticateToken, tenantContext, asyncHandler(async (req, res) => {
+    const resourceTypes = ['audit', 'incident', 'permit', 'api_call'];
+    const usage = {};
+
+    for (const resourceType of resourceTypes) {
+        usage[resourceType] = await featureService.getQuota(req.tenantId, resourceType);
+    }
+
+    const org = await prisma.organization.findUnique({
+        where: { id: req.tenantId },
+        select: {
+            subscriptionPlan: true,
+            subscriptionStatus: true,
+            currentPeriodEnd: true,
+            cancelAtPeriodEnd: true
+        }
+    });
+
+    res.json({ ...org, usage });
+}));
+
+// --- STRIPE WEBHOOKS ---
+const rawBodyParser = express.raw({ type: 'application/json' });
+app.post('/api/webhooks/stripe', rawBodyParser, asyncHandler(async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+    if (!stripe || !webhookSecret) {
+        return res.status(400).json({ error: 'Stripe not configured' });
+    }
+
+    let event;
+    try {
+        event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    } catch (err) {
+        console.error('Webhook signature verification failed:', err.message);
+        return res.status(400).json({ error: `Webhook Error: ${err.message}` });
+    }
+
+    await prisma.webhookEvent.create({
+        data: {
+            eventId: event.id,
+            eventType: event.type,
+            payload: event.data.object
+        }
+    });
+
+    try {
+        switch (event.type) {
+            case 'checkout.session.completed': {
+                const session = event.data.object;
+                const organizationId = session.metadata.organizationId;
+                
+                if (session.mode === 'subscription') {
+                    await prisma.organization.update({
+                        where: { id: organizationId },
+                        data: {
+                            stripeSubscriptionId: session.subscription,
+                            subscriptionStatus: 'active'
+                        }
+                    });
+                }
+                break;
+            }
+
+            case 'customer.subscription.created':
+            case 'customer.subscription.updated': {
+                const subscription = event.data.object;
+                const customer = await stripe.customers.retrieve(subscription.customer);
+                const organizationId = customer.metadata.organizationId;
+
+                const plan = subscription.items.data[0]?.price?.metadata?.plan || 'pro';
+
+                await prisma.organization.update({
+                    where: { id: organizationId },
+                    data: {
+                        stripeSubscriptionId: subscription.id,
+                        subscriptionStatus: subscription.status,
+                        subscriptionPlan: plan,
+                        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+                        cancelAtPeriodEnd: subscription.cancel_at_period_end,
+                        trialEndsAt: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null
+                    }
+                });
+                break;
+            }
+
+            case 'customer.subscription.deleted': {
+                const subscription = event.data.object;
+                const customer = await stripe.customers.retrieve(subscription.customer);
+                const organizationId = customer.metadata.organizationId;
+
+                await prisma.organization.update({
+                    where: { id: organizationId },
+                    data: {
+                        subscriptionStatus: 'canceled',
+                        subscriptionPlan: 'free',
+                        cancelAtPeriodEnd: false
+                    }
+                });
+                break;
+            }
+
+            case 'invoice.payment_succeeded': {
+                const invoice = event.data.object;
+                console.log(`Payment succeeded for invoice ${invoice.id}`);
+                break;
+            }
+
+            case 'invoice.payment_failed': {
+                const invoice = event.data.object;
+                const customer = await stripe.customers.retrieve(invoice.customer);
+                const organizationId = customer.metadata.organizationId;
+
+                await prisma.organization.update({
+                    where: { id: organizationId },
+                    data: { subscriptionStatus: 'past_due' }
+                });
+
+                const org = await prisma.organization.findUnique({ 
+                    where: { id: organizationId },
+                    include: { users: { where: { role: 'Compliance Manager' }, take: 1 } }
+                });
+
+                if (org.users[0]) {
+                    await emailService.sendAlert(
+                        org.users[0].email,
+                        'Payment Failed',
+                        'Your recent payment failed. Please update your payment method to avoid service interruption.'
+                    );
+                }
+                break;
+            }
+
+            default:
+                console.log(`Unhandled event type ${event.type}`);
+        }
+
+        await prisma.webhookEvent.update({
+            where: { eventId: event.id },
+            data: { processed: true, processedAt: new Date() }
+        });
+
+    } catch (error) {
+        console.error('Webhook processing error:', error);
+        await prisma.webhookEvent.update({
+            where: { eventId: event.id },
+            data: { processingError: error.message }
+        });
+    }
+
+    res.json({ received: true });
+}));
+
 // --- AI ---
-app.post('/api/ai/generate', authenticateToken, rateLimitMiddleware, tenantContext, asyncHandler(async (req, res) => {
+app.post('/api/ai/generate', authenticateToken, tenantContext, requireFeature('ai_insights'), asyncHandler(async (req, res) => {
     const { prompt } = req.body;
     if (!prompt) return res.status(400).json({ error: "Prompt is required" });
+    
+    await usageService.track(req.tenantId, 'api_call', null, 1, { endpoint: '/api/ai/generate' });
+    
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',

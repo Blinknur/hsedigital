@@ -30,6 +30,18 @@ package-lock.json
 dump.rdb
 *.rdb
 
+# Environment variables
+.env
+.env.local
+.env.*.local
+
 # Uploads directory
 server/public/uploads/*
 !server/public/uploads/.gitkeep
+
+# Prisma
+prisma/migrations
+
+# Database
+*.db
+*.sqlite

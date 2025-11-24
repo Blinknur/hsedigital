@@ -1,164 +1,254 @@
-# Redis-Based Distributed Rate Limiting
+# HSE.Digital Backend Server
 
-## Overview
-
-This implementation provides enterprise-grade distributed rate limiting using Redis and the Token Bucket algorithm. It supports per-tenant and per-user rate limits, plan-based configurations, standard rate limit headers, and monitoring/analytics capabilities.
+Enterprise backend server for HSE.Digital compliance platform with Stripe subscription management.
 
 ## Features
 
-### 1. Token Bucket Algorithm
-- **Distributed**: Uses Redis Lua scripts for atomic operations
-- **Smooth refill**: Tokens refill gradually over time
-- **Burst handling**: Allows burst requests up to bucket capacity
-- **Multi-level**: Separate buckets for hourly, daily, and per-user limits
+### Subscription Management
+- **Stripe Integration**: Full checkout session and customer portal support
+- **Webhook Handlers**: Automated subscription lifecycle event processing
+- **Plan-Based Feature Flags**: Enforce features based on subscription tier
+- **Usage Tracking**: Track resource consumption with quota middleware
+- **Multi-Tenant Billing**: Organization-level subscription management
 
-### 2. Plan-Based Rate Limits
+### Subscription Plans
+- **Free**: 2 stations, 3 users, 10 audits/month
+- **Pro**: 10 stations, 15 users, 100 audits/month, advanced reporting
+- **Enterprise**: Unlimited resources, SSO, custom branding, AI insights
 
-| Plan       | Requests/Hour | Requests/Day | Concurrent |
-|------------|---------------|--------------|------------|
-| Free       | 100           | 1,000        | 5          |
-| Basic      | 1,000         | 10,000       | 10         |
-| Pro        | 5,000         | 50,000       | 25         |
-| Enterprise | 20,000        | 200,000      | 100        |
+## Setup
 
-### 3. Standard Rate Limit Headers
+### Environment Variables
+Copy `.env.example` to `.env` and configure:
 
-All rate-limited endpoints return:
-- `X-RateLimit-Limit`: Maximum requests allowed
-- `X-RateLimit-Remaining`: Remaining requests in current window
-- `X-RateLimit-Reset`: ISO timestamp when the limit resets
-- `Retry-After`: Seconds to wait before retrying (on 429 errors)
+```bash
+cp .env.example .env
+```
 
-### 4. Multi-Level Rate Limiting
+Required variables:
+- `DATABASE_URL`: PostgreSQL connection string
+- `STRIPE_SECRET_KEY`: Stripe API secret key
+- `STRIPE_WEBHOOK_SECRET`: Stripe webhook signing secret
+- `JWT_SECRET`: JWT signing secret
+- `CLIENT_URL`: Frontend application URL
 
-**Per-Tenant (Organization)**:
-- Hourly limit based on subscription plan
-- Daily limit based on subscription plan
-- Protects against one organization consuming all resources
+### Install Dependencies
+```bash
+npm install
+```
 
-**Per-User**:
-- 10% of organization's hourly limit per user
-- Prevents individual users from monopolizing tenant quota
-- Fair distribution across team members
+### Database Setup
+```bash
+npx prisma generate
+npx prisma db push
+npm run seed
+```
 
-### 5. Monitoring & Analytics
+### Start Server
+```bash
+npm run dev
+```
 
-**Status Endpoint** (`GET /api/rate-limit/status`):
+## API Endpoints
+
+### Billing & Subscriptions
+
+#### Create Checkout Session
+```http
+POST /api/billing/checkout
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "priceId": "price_xxx"
+}
+```
+
+#### Create Customer Portal Session
+```http
+POST /api/billing/portal
+Authorization: Bearer {token}
+```
+
+#### Get Usage & Quota
+```http
+GET /api/billing/usage
+Authorization: Bearer {token}
+```
+
+Returns:
 ```json
 {
-  "plan": {
-    "requestsPerHour": 5000,
-    "requestsPerDay": 50000,
-    "concurrentRequests": 25
-  },
-  "tenant": {
-    "hourly": { "remaining": 4850, "limit": 5000 },
-    "daily": { "remaining": 48500, "limit": 50000 }
-  },
-  "user": {
-    "hourly": { "remaining": 485, "limit": 500 }
+  "subscriptionPlan": "pro",
+  "subscriptionStatus": "active",
+  "currentPeriodEnd": "2024-12-31T23:59:59.000Z",
+  "cancelAtPeriodEnd": false,
+  "usage": {
+    "audit": {
+      "limit": 100,
+      "used": 45,
+      "remaining": 55
+    },
+    "incident": {
+      "limit": 200,
+      "used": 12,
+      "remaining": 188
+    }
   }
 }
 ```
 
-**Analytics Endpoint** (`GET /api/rate-limit/analytics?days=7`):
+### Webhooks
+
+#### Stripe Webhook Handler
+```http
+POST /api/webhooks/stripe
+Stripe-Signature: {signature}
+Content-Type: application/json
+```
+
+Handles events:
+- `checkout.session.completed`
+- `customer.subscription.created`
+- `customer.subscription.updated`
+- `customer.subscription.deleted`
+- `invoice.payment_succeeded`
+- `invoice.payment_failed`
+
+## Middleware
+
+### Quota Check
+Enforces monthly resource limits based on subscription plan:
+
+```javascript
+app.post('/api/audits', authenticateToken, tenantContext, checkQuota('audit'), handler);
+```
+
+Returns 429 when quota exceeded:
 ```json
 {
-  "organizationId": "org-456",
-  "analytics": [
-    { "date": "2024-01-20", "requests": 4523 },
-    { "date": "2024-01-21", "requests": 5102 }
-  ]
+  "error": "Quota exceeded",
+  "message": "You have reached your monthly audit limit. Please upgrade your plan.",
+  "resourceType": "audit"
 }
 ```
 
-## Usage
-
-### Apply Rate Limiting to Routes
+### Feature Gate
+Restricts features to specific plans:
 
 ```javascript
-import { rateLimitMiddleware } from './rateLimit.js';
-
-// Apply to specific routes
-app.get('/api/data', authenticateToken, rateLimitMiddleware, handler);
-
-// Or apply globally
-app.use('/api/', authenticateToken, rateLimitMiddleware);
+app.post('/api/ai/generate', authenticateToken, requireFeature('ai_insights'), handler);
 ```
 
-### Environment Variables
+Returns 403 when feature unavailable:
+```json
+{
+  "error": "Feature not available",
+  "message": "This feature requires a higher plan. Current plan: free",
+  "feature": "ai_insights",
+  "currentPlan": "free"
+}
+```
 
+### Usage Tracking
+Automatically tracks API calls and resource creation:
+
+```javascript
+await usageService.track(organizationId, 'audit', auditId);
+```
+
+## Stripe Setup
+
+### 1. Create Products & Prices
+In Stripe Dashboard, create products for each plan:
+- Free tier (no price needed)
+- Pro tier (monthly/yearly prices)
+- Enterprise tier (monthly/yearly prices)
+
+### 2. Configure Webhook
+Add webhook endpoint in Stripe Dashboard:
+```
+https://your-domain.com/api/webhooks/stripe
+```
+
+Select events:
+- `checkout.session.completed`
+- `customer.subscription.created`
+- `customer.subscription.updated`
+- `customer.subscription.deleted`
+- `invoice.payment_succeeded`
+- `invoice.payment_failed`
+
+### 3. Add Metadata to Prices
+For each price in Stripe Dashboard, add metadata:
+```
+plan: pro
+```
+
+### 4. Test Webhooks
+Use Stripe CLI to forward webhooks locally:
 ```bash
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=your-redis-password
+stripe listen --forward-to localhost:3001/api/webhooks/stripe
 ```
 
-### Redis Keys Structure
+## Database Schema
 
-```
-ratelimit:tokens:tenant:{orgId}:hour     # Tenant hourly token bucket
-ratelimit:tokens:tenant:{orgId}:day      # Tenant daily token bucket
-ratelimit:tokens:user:{userId}:hour      # User hourly token bucket
-ratelimit:timestamp:tenant:{orgId}:hour  # Tenant hourly refill timestamp
-ratelimit:timestamp:tenant:{orgId}:day   # Tenant daily refill timestamp
-ratelimit:timestamp:user:{userId}:hour   # User hourly refill timestamp
-analytics:requests:{orgId}:{date}        # Daily request count per org
-analytics:requests:user:{userId}:{date}  # Daily request count per user
-```
+### Key Tables
 
-## Implementation Details
+**Organization**
+- Stripe customer/subscription IDs
+- Subscription status and period
+- Trial tracking
+- Usage records relation
 
-### Token Bucket Algorithm
+**UsageRecord**
+- Track resource consumption
+- Indexed by organization and type
+- Timestamped for period calculations
 
-The token bucket refills at a constant rate:
-- **Capacity**: Maximum tokens (request limit)
-- **Refill Rate**: Tokens added per interval
-- **Refill Interval**: Time between refills (60 seconds for hourly limits)
+**SubscriptionPlan** (reference data)
+- Stripe price/product mapping
+- Feature flags and limits
+- Trial configuration
 
-Example for Pro plan (5000 requests/hour):
-- Capacity: 5000 tokens
-- Refill Rate: ~83 tokens/minute
-- Refill Interval: 60 seconds
-
-### Atomic Operations
-
-All rate limit checks use Redis Lua scripts to ensure:
-- **Atomicity**: Token consumption and refill in single operation
-- **Consistency**: No race conditions in distributed environment
-- **Performance**: Single round-trip to Redis
-
-### Error Handling
-
-- Falls back to allowing requests if Redis is unavailable
-- Logs errors without blocking API requests
-- Returns proper HTTP 429 status with retry information
-
-## Testing
-
-```bash
-npm test -- rateLimit.test.js
-```
-
-## Performance Considerations
-
-- **Redis Lua Scripts**: Single network round-trip per check
-- **Key Expiration**: Automatic cleanup after 24 hours
-- **Connection Pooling**: ioredis handles connection reuse
-- **Graceful Degradation**: Continues operation if Redis fails
+**WebhookEvent**
+- Event deduplication
+- Processing status tracking
+- Error logging
 
 ## Monitoring
 
-Monitor these Redis metrics:
-- Command latency (should be < 1ms)
-- Memory usage (keys auto-expire)
-- Connection count
-- Error rate
+### Check Webhook Processing
+```sql
+SELECT * FROM "WebhookEvent" 
+WHERE processed = false 
+ORDER BY "createdAt" DESC;
+```
 
-## Future Enhancements
+### Check Usage Stats
+```sql
+SELECT 
+  "organizationId",
+  "resourceType",
+  COUNT(*) as total,
+  DATE_TRUNC('month', "recordedAt") as month
+FROM "UsageRecord"
+GROUP BY "organizationId", "resourceType", month
+ORDER BY month DESC, total DESC;
+```
 
-- [ ] Distributed circuit breaker integration
-- [ ] Adaptive rate limits based on system load
-- [ ] Geolocation-based rate limits
-- [ ] Real-time alerting for rate limit violations
-- [ ] Rate limit bypass for IP whitelisting
+## Security
+
+- Webhook signature verification required
+- JWT authentication on all endpoints
+- Multi-tenant data isolation
+- Rate limiting on API routes
+- Quota enforcement prevents abuse
+
+## Error Handling
+
+All Stripe operations include error handling:
+- Network failures gracefully handled
+- Webhook events logged for retry
+- Email notifications on payment failures
+- Automatic downgrade on subscription cancellation
