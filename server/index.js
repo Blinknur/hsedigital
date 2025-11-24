@@ -1,7 +1,7 @@
 
 import express from 'express';
 import cors from 'cors';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
@@ -16,6 +16,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
+import tenantProvisioningService from './services/tenantProvisioning.js';
 
 dotenv.config();
 
@@ -72,8 +73,70 @@ app.use('/uploads', express.static(uploadDir));
 // Initialize DB Client
 const prisma = new PrismaClient();
 
+// --- Tenant-Scoped Prisma Middleware ---
+prisma.$use(async (params, next) => {
+    // Skip for non-tenant models or operations without tenant context
+    const tenantModels = ['Station', 'Contractor', 'Audit', 'FormDefinition', 'Incident', 'WorkPermit'];
+    
+    if (!tenantModels.includes(params.model)) {
+        return next(params);
+    }
+
+    // Extract tenantId from context (set by tenant middleware)
+    const tenantId = params.args.tenantId;
+    delete params.args.tenantId; // Remove from args to avoid Prisma errors
+
+    if (!tenantId) {
+        // If no tenantId in context, proceed without filtering (e.g., for admin operations)
+        return next(params);
+    }
+
+    // Inject organizationId filter for read operations
+    if (params.action === 'findUnique' || params.action === 'findFirst') {
+        params.args.where = {
+            ...params.args.where,
+            organizationId: tenantId
+        };
+    }
+
+    if (params.action === 'findMany' || params.action === 'count') {
+        if (!params.args) params.args = {};
+        if (!params.args.where) params.args.where = {};
+        params.args.where = {
+            ...params.args.where,
+            organizationId: tenantId
+        };
+    }
+
+    // Inject organizationId for write operations
+    if (params.action === 'create') {
+        params.args.data = {
+            ...params.args.data,
+            organizationId: tenantId
+        };
+    }
+
+    if (params.action === 'createMany') {
+        if (Array.isArray(params.args.data)) {
+            params.args.data = params.args.data.map(item => ({
+                ...item,
+                organizationId: tenantId
+            }));
+        }
+    }
+
+    if (params.action === 'update' || params.action === 'updateMany' || params.action === 'delete' || params.action === 'deleteMany') {
+        params.args.where = {
+            ...params.args.where,
+            organizationId: tenantId
+        };
+    }
+
+    return next(params);
+});
+
 // Initialize AI Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenerativeAI(process.env.API_KEY);
 
 // Initialize Stripe Client (Conditional)
 const stripe = process.env.STRIPE_SECRET_KEY 
@@ -334,31 +397,44 @@ const generateTokens = (user) => {
     return { accessToken, refreshToken };
 };
 
-// --- Middleware: Auth Guard ---
+// --- Middleware: Auth Guard with Tenant Context Extraction ---
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
     if (!token) return res.sendStatus(401);
 
-    jwt.verify(token, JWT_SECRET, (err, user) => {
+    jwt.verify(token, JWT_SECRET, (err, decoded) => {
         if (err) return res.sendStatus(403);
-        req.user = user;
+        
+        // Extract organizationId from JWT payload and inject into request context
+        req.user = {
+            id: decoded.id,
+            email: decoded.email,
+            role: decoded.role,
+            organizationId: decoded.organizationId || null
+        };
+        
         next();
     });
 };
 
-// --- Middleware: Tenant Context ---
+// --- Middleware: Tenant Context (Enhanced) ---
 const tenantContext = async (req, res, next) => {
     const user = req.user;
     if (!user) return res.status(401).json({ error: 'Authentication required.' });
 
+    // Admin users can optionally specify tenant via x-tenant-id header
     if (user.role === 'Admin' && !user.organizationId) {
         req.tenantId = req.headers['x-tenant-id'] || null;
         return next();
     }
+    
+    // Regular users must have organizationId from JWT
     if (!user.organizationId) {
         return res.status(403).json({ error: 'Access Denied: No Organization Context' });
     }
+    
+    // Set tenant ID from JWT organizationId
     req.tenantId = user.organizationId;
     next();
 };
@@ -411,6 +487,28 @@ const trackApiUsage = async (req, res, next) => {
     next();
 };
 
+// --- Helper: Inject Tenant Context into Prisma ---
+const withTenant = (prismaClient, tenantId) => {
+    return new Proxy(prismaClient, {
+        get(target, prop) {
+            if (typeof target[prop] === 'object' && target[prop] !== null) {
+                return new Proxy(target[prop], {
+                    get(model, action) {
+                        if (typeof model[action] === 'function') {
+                            return function(args = {}) {
+                                // Inject tenantId into args for middleware to pick up
+                                return model[action]({ ...args, tenantId });
+                            };
+                        }
+                        return model[action];
+                    }
+                });
+            }
+            return target[prop];
+        }
+    });
+};
+
 // --- Helper: Async Error Wrapper ---
 const asyncHandler = (fn) => (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);
@@ -461,20 +559,93 @@ app.post('/api/admin/seed', asyncHandler(async (req, res) => {
     });
 }));
 
+// --- TENANT PROVISIONING API ---
+app.post('/api/admin/tenants', authenticateToken, asyncHandler(async (req, res) => {
+    if (req.user.role !== 'Admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { name, ownerId, subscriptionPlan, ssoConfig } = req.body;
+    const tenant = await tenantProvisioningService.createTenant({
+        name,
+        ownerId,
+        subscriptionPlan,
+        ssoConfig
+    });
+
+    res.status(201).json(tenant);
+}));
+
+app.post('/api/admin/tenants/provision', authenticateToken, asyncHandler(async (req, res) => {
+    if (req.user.role !== 'Admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const provisionedTenant = await tenantProvisioningService.provisionCompleteTenant(req.body);
+    res.status(201).json(provisionedTenant);
+}));
+
+app.get('/api/admin/tenants', authenticateToken, asyncHandler(async (req, res) => {
+    if (req.user.role !== 'Admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const tenants = await tenantProvisioningService.listTenants(req.query);
+    res.json(tenants);
+}));
+
+app.get('/api/admin/tenants/:id/stats', authenticateToken, asyncHandler(async (req, res) => {
+    if (req.user.role !== 'Admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const stats = await tenantProvisioningService.getTenantStats(req.params.id);
+    res.json(stats);
+}));
+
+app.put('/api/admin/tenants/:id/subscription', authenticateToken, asyncHandler(async (req, res) => {
+    if (req.user.role !== 'Admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { subscriptionPlan } = req.body;
+    const tenant = await tenantProvisioningService.updateSubscription(req.params.id, subscriptionPlan);
+    res.json(tenant);
+}));
+
+app.put('/api/admin/tenants/:id/sso', authenticateToken, asyncHandler(async (req, res) => {
+    if (req.user.role !== 'Admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const tenant = await tenantProvisioningService.configureSso(req.params.id, req.body);
+    res.json(tenant);
+}));
+
+app.delete('/api/admin/tenants/:id', authenticateToken, asyncHandler(async (req, res) => {
+    if (req.user.role !== 'Admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const tenant = await tenantProvisioningService.deactivateTenant(req.params.id);
+    res.json({ message: 'Tenant deactivated', tenant });
+}));
+
 // --- STATIONS ---
 app.get('/api/stations', authenticateToken, tenantContext, asyncHandler(async (req, res) => {
+    const db = withTenant(prisma, req.tenantId);
     const where = {};
-    if (req.tenantId) where.organizationId = req.tenantId;
     if (req.query.region) where.region = req.query.region;
-    const stations = await prisma.station.findMany({ where, orderBy: { name: 'asc' } });
+    const stations = await db.station.findMany({ where, orderBy: { name: 'asc' } });
     res.json(stations);
 }));
 
 // --- AUDITS ---
 app.get('/api/audits', authenticateToken, tenantContext, asyncHandler(async (req, res) => {
-    const where = { organizationId: req.tenantId };
+    const db = withTenant(prisma, req.tenantId);
+    const where = {};
     if (req.query.stationId) where.stationId = req.query.stationId;
-    const audits = await prisma.audit.findMany({
+    const audits = await db.audit.findMany({
         where,
         orderBy: { scheduledDate: 'desc' }
     });
@@ -482,10 +653,10 @@ app.get('/api/audits', authenticateToken, tenantContext, asyncHandler(async (req
 }));
 
 app.post('/api/audits', authenticateToken, tenantContext, checkQuota('audit'), asyncHandler(async (req, res) => {
+    const db = withTenant(prisma, req.tenantId);
     const { stationId, auditorId, scheduledDate, formId } = req.body;
-    const audit = await prisma.audit.create({
+    const audit = await db.audit.create({
         data: {
-            organizationId: req.tenantId,
             stationId,
             auditorId,
             scheduledDate: new Date(scheduledDate),
@@ -503,13 +674,14 @@ app.post('/api/audits', authenticateToken, tenantContext, checkQuota('audit'), a
 }));
 
 app.put('/api/audits/:id', authenticateToken, tenantContext, asyncHandler(async (req, res) => {
+    const db = withTenant(prisma, req.tenantId);
     const { id } = req.params;
     const updateData = req.body;
     delete updateData.id; 
     delete updateData.organizationId; 
     delete updateData.auditNumber;
-    await prisma.audit.updateMany({ where: { id, organizationId: req.tenantId }, data: updateData });
-    const updated = await prisma.audit.findUnique({ where: { id }});
+    await db.audit.updateMany({ where: { id }, data: updateData });
+    const updated = await db.audit.findUnique({ where: { id }});
     res.json(updated);
 }));
 
@@ -689,11 +861,11 @@ app.post('/api/ai/generate', authenticateToken, tenantContext, requireFeature('a
     await usageService.track(req.tenantId, 'api_call', null, 1, { endpoint: '/api/ai/generate' });
     
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-        });
-        res.json({ text: response.text });
+        const model = ai.getGenerativeModel({ model: 'gemini-pro' });
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text();
+        res.json({ text });
     } catch (aiError) {
         console.error("AI Service Error:", aiError);
         res.status(502).json({ error: "AI Service unavailable" });

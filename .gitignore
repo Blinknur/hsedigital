@@ -23,25 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 
-# NPM
-package-lock.json
-
-# Redis dumps (if running locally)
-dump.rdb
-*.rdb
-
 # Environment variables
 .env
 .env.local
 .env.*.local
 
-# Uploads directory
-server/public/uploads/*
-!server/public/uploads/.gitkeep
-
 # Prisma
-prisma/migrations
-
-# Database
-*.db
-*.sqlite
+**/node_modules/@prisma/client
