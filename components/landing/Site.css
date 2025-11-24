@@ -1,0 +1,195 @@
+/* Basic Reset & Typography */
+body {
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Header Styling */
+.landing-header {
+    border-bottom: 1px solid transparent;
+}
+
+.landing-header.scrolled {
+    border-bottom-color: #e2e8f0; /* slate-200 */
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05);
+}
+
+.nav-link {
+    position: relative;
+}
+
+.nav-link::after {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 2px;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #10b981; /* emerald-500 */
+    transition: width 0.3s ease-in-out;
+}
+
+.nav-link:hover::after, .nav-link.active::after {
+    width: 100%;
+}
+
+/* Hero Section Specifics */
+.hero-section {
+    background-color: #f8fafc; /* slate-50 */
+    background-image:
+        radial-gradient(at 20% 15%, hsla(148, 80%, 90%, 1) 0px, transparent 50%),
+        radial-gradient(at 80% 25%, hsla(222, 80%, 90%, 1) 0px, transparent 50%),
+        radial-gradient(at 50% 85%, hsla(0, 80%, 95%, 1) 0px, transparent 50%);
+}
+
+
+.browser-frame {
+    border: 1px solid #e2e8f0; /* slate-200 */
+    border-radius: 0.75rem; /* rounded-xl */
+    box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.15);
+    overflow: hidden;
+    background-color: white;
+}
+.browser-header {
+    background-color: #f1f5f9; /* slate-100 */
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid #e2e8f0; /* slate-200 */
+}
+
+/* Button Styles */
+.btn {
+    @apply inline-block px-5 py-2.5 rounded-lg font-semibold text-sm transition-all duration-300 focus:outline-none focus:ring-4 tracking-wide shadow-sm;
+}
+
+.btn:hover {
+    @apply shadow-lg -translate-y-0.5;
+}
+
+.btn-lg {
+    @apply px-8 py-3.5 text-base;
+}
+
+.btn-primary {
+    @apply bg-emerald-500 text-white hover:bg-emerald-600 focus:ring-emerald-300;
+}
+
+.btn-secondary {
+    @apply bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 focus:ring-slate-200;
+}
+
+/* NEW: Feature Icon Style */
+.feature-icon {
+    @apply w-16 h-16 rounded-xl flex items-center justify-center;
+}
+
+
+/* Pricing Card */
+.pricing-card {
+    @apply bg-white p-8 rounded-xl border border-slate-200 flex flex-col shadow-sm transition-all duration-300;
+}
+
+.pricing-card:hover {
+    @apply shadow-xl -translate-y-2;
+}
+
+.pricing-card.popular {
+    @apply border-emerald-500 relative ring-4 ring-emerald-100;
+    box-shadow: 0 0 45px rgba(16, 185, 129, 0.2);
+}
+
+.pricing-card.popular::before {
+    content: 'Most Popular';
+    @apply absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full tracking-wide;
+}
+
+.pricing-title {
+    @apply text-xl font-semibold text-slate-900;
+}
+
+.pricing-price {
+    @apply text-4xl font-extrabold text-slate-900 my-4 tracking-tighter;
+}
+
+.pricing-period {
+    @apply text-base font-medium text-slate-500;
+}
+
+.pricing-desc {
+    @apply text-sm text-slate-600 mb-6 leading-relaxed;
+}
+
+.pricing-features {
+    @apply space-y-3 text-sm flex-grow text-slate-600;
+    list-style-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="%2310b981"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>');
+    @apply pl-6 mb-8;
+}
+
+/* Testimonial Card */
+.testimonial-card {
+    @apply bg-white p-8 rounded-xl border border-slate-200 shadow-sm;
+}
+
+.testimonial-text {
+    @apply text-slate-700 text-lg italic relative leading-relaxed;
+}
+.testimonial-text::before {
+    content: '“';
+    @apply absolute -top-8 -left-5 text-8xl text-slate-100 font-serif;
+    z-index: 0;
+}
+
+.testimonial-author {
+    @apply mt-6 pt-6 border-t border-slate-200;
+}
+
+.testimonial-author img {
+    @apply w-14 h-14 rounded-full object-cover flex-shrink-0;
+}
+
+/* New Static Page Styles */
+.page-header {
+    @apply pt-32 pb-16 bg-slate-100 text-center;
+}
+.page-title {
+    @apply text-4xl md:text-5xl font-extrabold text-slate-900 tracking-tighter;
+}
+.page-subtitle {
+    @apply mt-4 max-w-2xl mx-auto text-lg text-slate-600;
+}
+
+.content-section {
+    @apply py-16 sm:py-20;
+}
+
+.section-title {
+    @apply text-3xl font-bold text-slate-900 tracking-tighter;
+}
+
+/* Team Member Card */
+.team-card {
+    @apply text-center;
+}
+.team-card img {
+    @apply w-32 h-32 rounded-full mx-auto mb-4 object-cover shadow-md;
+}
+.team-card-name {
+    @apply font-bold text-slate-800 text-lg;
+}
+.team-card-title {
+    @apply text-sm text-emerald-600 font-semibold;
+}
+
+/* Job Listing Card */
+.job-card {
+    @apply bg-white p-6 rounded-lg border border-slate-200 flex flex-col sm:flex-row justify-between sm:items-center hover:border-emerald-300 transition-colors;
+}
+
+/* Contact Form */
+.form-input {
+    @apply block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm;
+}
+.form-label {
+    @apply block text-sm font-medium text-slate-700 mb-1;
+}

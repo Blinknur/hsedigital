@@ -1,0 +1,8 @@
+{
+  "name": "HSE & Compliance Dashboard",
+  "description": "A unified Digital HSE & Compliance Dashboard for fuel stations. It allows logging, tracking, and visualizing inspections, safety checklists, incident reports, and compliance status in real time.",
+  "requestFramePermissions": [
+    "geolocation",
+    "camera"
+  ]
+}

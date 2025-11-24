@@ -1,0 +1,360 @@
+openapi: 3.0.3
+info:
+  title: HSE.Digital API
+  description: >
+    API documentation for the HSE.Digital Compliance Platform.
+    This API is designed for multi-tenancy, enforcing strict data isolation via Organization ID.
+  version: 1.0.0
+  contact:
+    name: Engineering Team
+    email: dev@hse.digital
+
+servers:
+  - url: https://api.hse.digital/v1
+    description: Production Server
+  - url: http://localhost:3000/v1
+    description: Local Development Server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # --- Common Types ---
+    Error:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+
+    # --- Domain Entities ---
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+          enum: [Admin, ComplianceManager, StationManager, Auditor, Contractor]
+        organizationId:
+          type: string
+          format: uuid
+        assignedStationIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    Station:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        organizationId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        region:
+          type: string
+        riskCategory:
+          type: string
+          enum: [Low, Medium, High]
+        isActive:
+          type: boolean
+
+    Audit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        auditNumber:
+          type: string
+        stationId:
+          type: string
+          format: uuid
+        auditorId:
+          type: string
+          format: uuid
+        scheduledDate:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [PendingApproval, Approved, Scheduled, InProgress, Completed, Closed, Declined]
+        overallScore:
+          type: number
+          minimum: 0
+          maximum: 100
+        findings:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditFinding'
+
+    AuditFinding:
+      type: object
+      properties:
+        itemId:
+          type: string
+        status:
+          type: string
+          enum: [Compliant, Non-Compliant, N/A]
+        severity:
+          type: string
+          enum: [Critical, Major, Minor]
+        observations:
+          type: string
+    
+    PermitToWork:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        permitNumber:
+          type: string
+        stationId:
+          type: string
+          format: uuid
+        contractorId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [HotWork, ConfinedSpaceEntry, ElectricalWork, Excavation, WorkAtHeight]
+        status:
+          type: string
+          enum: [Draft, PendingApproval, Approved, Active, Closed, Rejected]
+        validFrom:
+          type: string
+          format: date-time
+        validTo:
+          type: string
+          format: date-time
+    
+    Incident:
+      type: object
+      properties:
+        id:
+           type: string
+           format: uuid
+        type:
+           type: string
+           enum: [Spill, NearMiss, SafetyObservation, Injury, Other]
+        description:
+           type: string
+        status:
+           type: string
+           enum: [Open, UnderInvestigation, Closed]
+        timestamp:
+           type: string
+           format: date-time
+
+security:
+  - bearerAuth: []
+
+paths:
+  # --- AUTHENTICATION ---
+  /auth/login:
+    post:
+      summary: Authenticate user via Email/Password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+
+  # --- STATIONS ---
+  /stations:
+    get:
+      summary: List all stations for the current tenant
+      tags: [Stations]
+      parameters:
+        - in: query
+          name: region
+          schema:
+            type: string
+          description: Filter by region
+      responses:
+        '200':
+          description: A list of stations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Station'
+    post:
+      summary: Create a new station
+      tags: [Stations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, region]
+              properties:
+                name:
+                  type: string
+                region:
+                  type: string
+      responses:
+        '201':
+          description: Station created
+          content:
+            application/json:
+               schema:
+                 $ref: '#/components/schemas/Station'
+
+  # --- AUDITS ---
+  /audits:
+    get:
+      summary: List audits with filtering
+      tags: [Audits]
+      parameters:
+        - in: query
+          name: stationId
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: status
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of audits
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Audit'
+    post:
+      summary: Schedule or request a new audit
+      tags: [Audits]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stationId, scheduledDate, formId]
+              properties:
+                stationId:
+                  type: string
+                scheduledDate:
+                  type: string
+                  format: date-time
+                formId:
+                  type: string
+      responses:
+        '201':
+          description: Audit created
+
+  # --- PERMITS (Contractor Module) ---
+  /permits:
+    get:
+      summary: List work permits
+      tags: [Permits]
+      responses:
+        '200':
+          description: List of permits
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PermitToWork'
+    post:
+      summary: Request a new permit
+      tags: [Permits]
+      requestBody:
+        required: true
+        content:
+          application/json:
+             schema:
+               $ref: '#/components/schemas/PermitToWork'
+      responses:
+        '201':
+          description: Permit requested
+
+  # --- INCIDENTS ---
+  /incidents:
+    get:
+      summary: List incidents
+      tags: [Incidents]
+      responses:
+        '200':
+           description: List of incidents
+           content:
+             application/json:
+               schema:
+                 type: array
+                 items:
+                   $ref: '#/components/schemas/Incident'
+    post:
+      summary: Report a new incident
+      tags: [Incidents]
+      requestBody:
+         required: true
+         content:
+           application/json:
+             schema:
+               $ref: '#/components/schemas/Incident'
+      responses:
+        '201':
+           description: Incident reported
+
+  # --- ANALYTICS ---
+  /analytics/kpis:
+    get:
+      summary: Get high-level KPIs for dashboard
+      tags: [Analytics]
+      responses:
+        '200':
+          description: KPI Data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  complianceScore:
+                    type: number
+                  openCapas:
+                    type: integer
+                  openIncidents:
+                    type: integer

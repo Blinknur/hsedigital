@@ -1,0 +1,47 @@
+
+version: '3.8'
+
+services:
+  # --- Application (Frontend + Backend) ---
+  app:
+    build: .
+    container_name: hse_app
+    restart: always
+    ports:
+      - "3000:3001"
+    environment:
+      - DATABASE_URL=postgresql://hse_admin:dev_password_123@postgres:5432/hse_platform
+      - JWT_SECRET=dev-secret-key-change-in-prod
+      - REFRESH_SECRET=dev-refresh-secret
+      - NODE_ENV=production
+      - API_KEY=${API_KEY}
+      - CLIENT_URL=http://localhost:3000
+    depends_on:
+      - postgres
+      - redis
+
+  # --- Primary Database (Multi-Tenant) ---
+  postgres:
+    image: postgres:15-alpine
+    container_name: hse_db
+    restart: always
+    environment:
+      POSTGRES_USER: hse_admin
+      POSTGRES_PASSWORD: dev_password_123
+      POSTGRES_DB: hse_platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # --- Caching & Session Layer ---
+  redis:
+    image: redis:7-alpine
+    container_name: hse_cache
+    restart: always
+    ports:
+      - "6379:6379"
+    command: redis-server --save 60 1 --loglevel warning
+
+volumes:
+  postgres_data:
