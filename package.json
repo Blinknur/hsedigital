@@ -7,9 +7,11 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "build": "echo 'Build: Using Docker multi-stage build' && docker build -t hse-digital:latest .",
+    "build": "echo 'Build: Frontend build managed separately (see vite.config.ts)'",
+    "build:frontend": "cd src && vite build",
+    "build:sourcemaps": "SENTRY_RELEASE=$(git describe --tags --always) && cd src && vite build",
     "test": "echo 'Tests: Not yet configured' && exit 0",
-    "lint": "echo 'Lint: Not yet configured' && exit 0",
+    "lint": "cd server && npm run lint",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "seed": "node prisma/seed.js",

@@ -45,7 +45,7 @@ import { logger } from './utils/logger.js';
 import { initSentry, sentryRequestHandler, sentryTracingHandler, sentryErrorHandler } from './utils/sentry.js';
 import { httpLogger } from './middleware/logging.js';
 import { metricsMiddleware } from './middleware/metrics.js';
-import { sentryContextMiddleware } from './middleware/sentry.js';
+import { sentryContextMiddleware, sentryPerformanceMiddleware } from './middleware/sentry.js';
 import { createInstrumentedPrismaClient } from './utils/prisma-instrumented.js';
 import { alertManager } from './monitoring/alerts.js';
 import backupRoutes from './routes/backup.js';
@@ -103,6 +103,7 @@ app.use('/api/', ipRateLimit);
 app.use(auditLogger());
 
 app.use(sentryContextMiddleware);
+app.use(sentryPerformanceMiddleware);
 
 app.use('/uploads', express.static(uploadDir));
 
@@ -480,6 +481,14 @@ app.use(sentryErrorHandler());
 
 // --- Global Error Handler ---
 app.use((err, req, res, next) => {
+    const errorContext = {
+        method: req.method,
+        url: req.url,
+        tenantId: req.tenantId,
+        userId: req.user?.id,
+        statusCode: err.statusCode || 500
+    };
+
     logger.error({
         err,
         req: {
@@ -493,12 +502,7 @@ app.use((err, req, res, next) => {
     }, 'Unhandled error');
 
     if (err.statusCode >= 500 || !err.statusCode) {
-        alertManager.criticalError(err, {
-            method: req.method,
-            url: req.url,
-            tenantId: req.tenantId,
-            userId: req.user?.id
-        });
+        alertManager.criticalError(err, errorContext);
     }
 
     const statusCode = err.statusCode || 500;

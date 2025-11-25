@@ -6,14 +6,90 @@ This platform includes comprehensive monitoring and observability features:
 
 - **Structured Logging**: JSON logging with Pino
 - **Metrics**: Prometheus metrics export
-- **Error Tracking**: Sentry integration
+- **Error Tracking**: Sentry integration with advanced multi-tenant features
+- **Performance Monitoring**: Tier-based transaction sampling and profiling
 - **Health Checks**: Health, readiness, and liveness endpoints
 - **Alerting**: Custom alerting with Slack and PagerDuty integration
 - **Dashboards**: Pre-built Grafana dashboards
+- **Source Maps**: Automatic release tracking for debugging minified code
 
 ## Components
 
-### 1. Structured Logging (Pino)
+### 1. Sentry Integration (Enhanced)
+
+**Location**: `server/utils/sentry.js`, `server/middleware/sentry.js`
+
+**Features**:
+- **Request Context Enrichment**: Automatically captures user, tenant, organization info
+- **Multi-Tenant Error Fingerprinting**: Custom fingerprinting based on tenant ID and error type
+- **Release Tracking**: Auto-detects git version for source map support
+- **Tier-Based Performance Sampling**: Adjusts transaction sampling by subscription tier
+  - Free: 1% traces, 0% profiling
+  - Starter: 5% traces, 1% profiling
+  - Professional: 25% traces, 10% profiling
+  - Enterprise: 100% traces, 50% profiling
+- **Smart Filtering**: Excludes health checks, ignores 4xx errors
+- **PII Scrubbing**: Removes sensitive data (passwords, tokens, cookies)
+
+**Setup**:
+```bash
+# Set environment variables
+SENTRY_DSN=your-sentry-dsn
+SENTRY_RELEASE=hse-digital@1.0.0-abc123  # Auto-detected from git
+SENTRY_DIST=production
+```
+
+**Usage**:
+```javascript
+import { captureException, setUserContext, addBreadcrumb } from './utils/sentry.js';
+
+// Manual exception capture
+captureException(error, {
+  tenantId: 'org_123',
+  organizationName: 'Acme Corp',
+  userId: 'user_456'
+});
+
+// Add context breadcrumbs
+addBreadcrumb('Data processed', 'processing', 'info', { recordCount: 100 });
+```
+
+**Source Maps**:
+Frontend source maps are generated during build (configured in `vite.config.ts`):
+```bash
+# Root build with release tracking
+npm run build:sourcemaps
+
+# Or manual frontend build
+cd src && vite build
+```
+
+**Multi-Tenant Error Fingerprinting**:
+Errors are automatically fingerprinted by:
+1. Tenant ID
+2. Error type (exception class)
+3. Error message (first 50 chars)
+4. Optional resource name
+
+This ensures errors are grouped by tenant for better debugging in multi-tenant environments.
+
+**Performance Sampling by Tier**:
+Transaction and profile sampling rates automatically adjust based on organization subscription tier:
+
+| Tier         | Trace Sample Rate | Profile Sample Rate | Use Case |
+|--------------|-------------------|---------------------|----------|
+| Free         | 1%                | 0%                  | Basic error tracking |
+| Starter      | 5%                | 1%                  | Light performance monitoring |
+| Professional | 25%               | 10%                 | Comprehensive monitoring |
+| Enterprise   | 100%              | 50%                 | Full observability |
+
+Special routes:
+- Health checks: 0.1% sampling
+- Metrics endpoint: 0% sampling (disabled)
+- Webhooks: 100% sampling (critical)
+- Billing/backup: 2x tier rate (capped at 100%)
+
+### 2. Structured Logging (Pino)
 
 **Location**: `server/utils/logger.js`, `server/middleware/logging.js`
 

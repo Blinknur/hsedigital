@@ -18,8 +18,8 @@ COPY . .
 # Generate Prisma client
 RUN npx prisma generate
 
-# Build frontend (if using Vite)
-RUN npm run build || echo "No build script found"
+# Build frontend with sourcemaps
+RUN npm run build:sourcemaps || npm run build || echo "No build script found"
 
 # Stage 2: Production runtime
 FROM node:18-alpine AS production
@@ -37,10 +37,13 @@ RUN cd server && npm install --only=production
 COPY prisma ./prisma
 RUN npx prisma generate
 
-# Copy built application from builder stage
+# Copy built application from builder stage (including source maps)
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server ./server
 COPY --from=builder /app/node_modules ./node_modules
+
+# Copy .git directory for release version detection (optional, remove in production if concerned about size)
+COPY --from=builder /app/.git ./.git
 
 # Create uploads directory
 RUN mkdir -p /app/server/public/uploads

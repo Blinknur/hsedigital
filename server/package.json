@@ -7,6 +7,8 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
+    "build": "echo 'Backend: No build step required for Node.js server'",
+    "lint": "node -c index.js && node -c utils/sentry.js && node -c middleware/sentry.js && echo '✓ Syntax check passed'",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:migrate:custom": "node prisma/run-migrations.js up",

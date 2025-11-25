@@ -14,6 +14,14 @@ export default defineConfig({
     // If needed, prefix with VITE_
     'process.env.API_KEY': JSON.stringify(process.env.API_KEY),
   },
+  build: {
+    sourcemap: true,
+    rollupOptions: {
+      output: {
+        sourcemapExcludeSources: process.env.NODE_ENV === 'production'
+      }
+    }
+  },
   server: {
     port: 5173,
     proxy: {

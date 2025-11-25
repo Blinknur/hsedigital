@@ -34,8 +34,11 @@ npm run lint
 # Run tests in Docker
 docker-compose exec app npm test
 
-# Local tests
+# Local tests (requires dependencies)
 cd server && npm test
+
+# Quick syntax check
+cd server && npm run lint
 ```
 
 **Dev Server:**
@@ -71,7 +74,7 @@ npm run docker:ps          # List containers
 - **Authentication:** JWT
 - **Containerization:** Docker + Docker Compose
 - **Security:** Helmet, express-rate-limit, CORS
-- **Monitoring:** Pino (logging), Prometheus (metrics), Sentry (errors), Grafana (dashboards)
+- **Monitoring:** Pino (logging), Prometheus (metrics), Sentry (errors + performance), Grafana (dashboards)
 
 ## Architecture
 - **Structure:** Multi-tenant SaaS with organization-based isolation
