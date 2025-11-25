@@ -118,6 +118,8 @@ volumes:
     name: hse_pgadmin_data
   app_uploads:
     name: hse_app_uploads
+  backup_data:
+    name: hse_backup_data
 
 networks:
   hse_network:

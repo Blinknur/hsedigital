@@ -89,3 +89,10 @@ loki_data/
 k8s/secrets/*.yaml
 !k8s/secrets/.gitkeep
 k8s/overlays/*/secrets.yaml
+
+# Backups
+*.sql.gz
+*.backup
+*.dump
+backups/
+/var/backups/

@@ -23,7 +23,12 @@
     "docker:restart": "docker-compose restart",
     "docker:clean": "docker-compose down -v",
     "docker:ps": "docker-compose ps",
-    "docker:health": "docker-compose ps && curl -f http://localhost:3001/api/health || echo 'Services not running'"
+    "docker:health": "docker-compose ps && curl -f http://localhost:3001/api/health || echo 'Services not running'",
+    "backup": "./scripts/backup.sh",
+    "backup:tenant": "./scripts/backup.sh --tenant",
+    "restore": "./scripts/restore.sh",
+    "restore:list": "./scripts/restore.sh --list",
+    "backup:test": "./scripts/weekly-backup-test.sh"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

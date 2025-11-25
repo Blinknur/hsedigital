@@ -48,6 +48,7 @@ import { metricsMiddleware } from './middleware/metrics.js';
 import { sentryContextMiddleware } from './middleware/sentry.js';
 import { createInstrumentedPrismaClient } from './utils/prisma-instrumented.js';
 import { alertManager } from './monitoring/alerts.js';
+import backupRoutes from './routes/backup.js';
 
 dotenv.config();
 
@@ -190,6 +191,9 @@ app.use('/api', healthRoutes);
 app.use('/', metricsRoutes);
 
 // --- REST API Routes ---
+
+// BACKUP ROUTES
+app.use('/api/backup', authenticateToken, requireRole('Admin'), backupRoutes);
 
 // FILE UPLOAD
 app.post('/api/upload', authenticateToken, userRateLimit, upload.single('file'), asyncHandler(async (req, res) => {
