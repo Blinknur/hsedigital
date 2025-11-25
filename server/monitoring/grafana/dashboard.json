@@ -1,0 +1,192 @@
+{
+  "dashboard": {
+    "title": "HSE Digital - Platform Monitoring",
+    "uid": "hse-digital-platform",
+    "version": 1,
+    "timezone": "browser",
+    "editable": true,
+    "graphTooltip": 1,
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "title": "Request Rate (per minute)",
+        "type": "graph",
+        "id": 1,
+        "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(hse_digital_http_requests_total[1m])",
+            "legendFormat": "{{method}} {{route}} ({{status_code}})"
+          }
+        ]
+      },
+      {
+        "title": "Error Rate (per minute)",
+        "type": "graph",
+        "id": 2,
+        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(hse_digital_http_request_errors_total[1m])",
+            "legendFormat": "{{error_type}} ({{status_code}})"
+          }
+        ]
+      },
+      {
+        "title": "Request Latency (p50, p95, p99)",
+        "type": "graph",
+        "id": 3,
+        "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(hse_digital_http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "p50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(hse_digital_http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "p95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(hse_digital_http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "p99"
+          }
+        ]
+      },
+      {
+        "title": "Active Connections",
+        "type": "graph",
+        "id": 4,
+        "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "hse_digital_active_connections",
+            "legendFormat": "Tenant {{tenant_id}}"
+          }
+        ]
+      },
+      {
+        "title": "Database Query Latency (p95)",
+        "type": "graph",
+        "id": 5,
+        "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(hse_digital_database_query_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{model}}.{{operation}}"
+          }
+        ]
+      },
+      {
+        "title": "Database Query Rate",
+        "type": "graph",
+        "id": 6,
+        "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(hse_digital_database_queries_total[1m])",
+            "legendFormat": "{{model}}.{{operation}} ({{status}})"
+          }
+        ]
+      },
+      {
+        "title": "Cache Hit Rate",
+        "type": "graph",
+        "id": 7,
+        "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(hse_digital_cache_hits_total[1m]) / (rate(hse_digital_cache_hits_total[1m]) + rate(hse_digital_cache_misses_total[1m]))",
+            "legendFormat": "Cache Hit Rate"
+          }
+        ]
+      },
+      {
+        "title": "Rate Limit Hits",
+        "type": "graph",
+        "id": 8,
+        "gridPos": { "x": 12, "y": 24, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(hse_digital_rate_limit_hits_total[1m])",
+            "legendFormat": "{{limit_type}} - Tenant {{tenant_id}}"
+          }
+        ]
+      },
+      {
+        "title": "Authentication Attempts",
+        "type": "graph",
+        "id": 9,
+        "gridPos": { "x": 0, "y": 32, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(hse_digital_auth_attempts_total[1m])",
+            "legendFormat": "{{method}} ({{status}})"
+          }
+        ]
+      },
+      {
+        "title": "Authentication Failures",
+        "type": "graph",
+        "id": 10,
+        "gridPos": { "x": 12, "y": 32, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(hse_digital_auth_failures_total[1m])",
+            "legendFormat": "{{method}} - {{reason}}"
+          }
+        ]
+      },
+      {
+        "title": "Tenant Request Rate",
+        "type": "graph",
+        "id": 11,
+        "gridPos": { "x": 0, "y": 40, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(hse_digital_tenant_requests_total[1m])",
+            "legendFormat": "Tenant {{tenant_id}} - {{endpoint}}"
+          }
+        ]
+      },
+      {
+        "title": "Tenant Latency (p95)",
+        "type": "graph",
+        "id": 12,
+        "gridPos": { "x": 12, "y": 40, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(hse_digital_tenant_latency_seconds_bucket[5m]))",
+            "legendFormat": "Tenant {{tenant_id}} - {{endpoint}}"
+          }
+        ]
+      },
+      {
+        "title": "Tenant Error Rate",
+        "type": "graph",
+        "id": 13,
+        "gridPos": { "x": 0, "y": 48, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(hse_digital_tenant_errors_total[1m])",
+            "legendFormat": "Tenant {{tenant_id}} - {{error_type}}"
+          }
+        ]
+      },
+      {
+        "title": "System Memory Usage",
+        "type": "graph",
+        "id": 14,
+        "gridPos": { "x": 12, "y": 48, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "process_resident_memory_bytes{job=\"hse-digital\"}",
+            "legendFormat": "Memory Usage"
+          }
+        ]
+      }
+    ]
+  }
+}

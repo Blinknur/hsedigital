@@ -4,11 +4,8 @@ import cors from 'cors';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
 import helmet from 'helmet';
 import compression from 'compression';
-import morgan from 'morgan';
-import rateLimit from 'express-rate-limit';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -42,6 +39,15 @@ import { requireQuota, trackUsage, requireFeature } from './middleware/quota.js'
 import { getUsageStats } from './services/quotaService.js';
 import billingRoutes from './routes/billing.js';
 import webhookRoutes from './routes/webhooks.js';
+import healthRoutes from './routes/health.js';
+import metricsRoutes from './routes/metrics.js';
+import { logger } from './utils/logger.js';
+import { initSentry, sentryRequestHandler, sentryTracingHandler, sentryErrorHandler } from './utils/sentry.js';
+import { httpLogger } from './middleware/logging.js';
+import { metricsMiddleware } from './middleware/metrics.js';
+import { sentryContextMiddleware } from './middleware/sentry.js';
+import { createInstrumentedPrismaClient } from './utils/prisma-instrumented.js';
+import { alertManager } from './monitoring/alerts.js';
 
 dotenv.config();
 
@@ -60,22 +66,22 @@ if (!fs.existsSync(uploadDir)){
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// --- Enterprise Middleware Stack ---
+initSentry(app);
 
-// 1. Security Headers
+app.use(sentryRequestHandler());
+app.use(sentryTracingHandler());
+
 app.use(securityHeaders());
 app.use(additionalSecurityHeaders);
 
-// 2. Compression (Gzip)
 app.use(compression());
 
-// 3. HTTP Request Logging (Morgan)
-app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+app.use(httpLogger);
 
-// 4. Cookie Parser
+app.use(metricsMiddleware);
+
 app.use(cookieParser());
 
-// 5. CORS & Body Parsing
 app.use(cors({
     origin: process.env.CORS_ORIGIN || '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -83,29 +89,25 @@ app.use(cors({
     credentials: true
 }));
 
-// Webhooks need raw body for signature verification - MUST be before express.json()
 app.use('/api/webhooks', webhookRoutes);
 
-// Apply JSON parsing to all other routes
 app.use(express.json({ limit: '10mb' }));
 
-// 6. Request Sanitization
 app.use(sanitizeRequest());
 
-// 7. CSRF Protection
 app.use(generateCSRFMiddleware());
 
-// 8. IP-based Rate Limiting
 app.use('/api/', ipRateLimit);
 
-// 9. Security Audit Logging
 app.use(auditLogger());
 
-// Serve Uploaded Files Statically
+app.use(sentryContextMiddleware);
+
 app.use('/uploads', express.static(uploadDir));
 
-// Initialize DB Client
-const prisma = new PrismaClient();
+const prisma = createInstrumentedPrismaClient();
+
+logger.info('Initialized instrumented Prisma client');
 
 // Initialize AI Client
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -183,11 +185,11 @@ const asyncHandler = (fn) => (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);
 };
 
-// --- REST API Routes ---
+// --- Monitoring Routes (no auth) ---
+app.use('/api', healthRoutes);
+app.use('/', metricsRoutes);
 
-app.get('/api/health', (req, res) => {
-    res.json({ status: 'online', db: 'connected', mode: process.env.NODE_ENV || 'development' });
-});
+// --- REST API Routes ---
 
 // FILE UPLOAD
 app.post('/api/upload', authenticateToken, userRateLimit, upload.single('file'), asyncHandler(async (req, res) => {
@@ -469,21 +471,72 @@ if (fs.existsSync(frontendPath)) {
     });
 }
 
+// --- Sentry Error Handler ---
+app.use(sentryErrorHandler());
+
 // --- Global Error Handler ---
 app.use((err, req, res, next) => {
-    console.error('Unhandled Error:', err);
+    logger.error({
+        err,
+        req: {
+            method: req.method,
+            url: req.url,
+            headers: req.headers,
+            body: req.body
+        },
+        tenantId: req.tenantId,
+        userId: req.user?.id
+    }, 'Unhandled error');
+
+    if (err.statusCode >= 500 || !err.statusCode) {
+        alertManager.criticalError(err, {
+            method: req.method,
+            url: req.url,
+            tenantId: req.tenantId,
+            userId: req.user?.id
+        });
+    }
+
     const statusCode = err.statusCode || 500;
     res.status(statusCode).json({ error: err.message || 'Internal Server Error' });
 });
 
 // --- Startup ---
 const server = app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
+    logger.info({ port: PORT, env: process.env.NODE_ENV }, `🚀 Server running on http://localhost:${PORT}`);
+    logger.info('✅ Monitoring enabled: Logs (Pino), Metrics (Prometheus), Errors (Sentry), Alerts (Custom)');
     startAuditLogCleanupScheduler();
 });
 
 process.on('SIGTERM', () => {
+    logger.info('SIGTERM received, shutting down gracefully');
     server.close(() => {
-        prisma.$disconnect();
+        logger.info('HTTP server closed');
+        prisma.$disconnect().then(() => {
+            logger.info('Database connection closed');
+            process.exit(0);
+        });
     });
+});
+
+process.on('SIGINT', () => {
+    logger.info('SIGINT received, shutting down gracefully');
+    server.close(() => {
+        logger.info('HTTP server closed');
+        prisma.$disconnect().then(() => {
+            logger.info('Database connection closed');
+            process.exit(0);
+        });
+    });
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    logger.error({ reason, promise }, 'Unhandled Promise Rejection');
+    alertManager.criticalError(new Error('Unhandled Promise Rejection'), { reason });
+});
+
+process.on('uncaughtException', (error) => {
+    logger.fatal({ error }, 'Uncaught Exception');
+    alertManager.criticalError(error, { type: 'uncaughtException' });
+    process.exit(1);
 });

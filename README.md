@@ -1,4 +1,3 @@
-
 # HSE.Digital - Compliance & Safety Platform
 
 HSE.Digital is a unified SaaS platform for managing audits, compliance checklists, incidents, and contractor permits for fuel station networks.
@@ -46,319 +45,245 @@ HSE.Digital is a unified SaaS platform for managing audits, compliance checklist
 5. **Access the application**
    - Main App: http://localhost:3001
    - API Health: http://localhost:3001/api/health
+   - API Metrics: http://localhost:3001/metrics
    - pgAdmin: http://localhost:5050 (login with credentials from .env)
 
-### Docker Commands
+### Quick Start with Full Monitoring Stack
+
+For production-like monitoring setup with Prometheus, Grafana, and Loki:
 
 ```bash
-# Start all services
-npm run docker:up
+# Start full monitoring stack
+docker-compose -f docker-compose.monitoring.yml up -d
 
-# Stop all services
-npm run docker:down
-
-# View logs (all services)
-npm run docker:logs
-
-# View logs (specific service)
-npm run docker:logs:app
-npm run docker:logs:db
-npm run docker:logs:redis
-
-# Rebuild containers
-npm run docker:build
-
-# Restart services
-npm run docker:restart
-
-# Stop and remove volumes (clean slate)
-npm run docker:clean
-
-# View running containers
-npm run docker:ps
+# Access services
+open http://localhost:3001      # Application
+open http://localhost:3000      # Grafana (admin/admin123)
+open http://localhost:9090      # Prometheus
 ```
 
-### Local Development (Without Docker)
+See [server/MONITORING.md](server/MONITORING.md) for detailed monitoring documentation.
 
-If you prefer to run services locally:
+## 📊 Monitoring & Observability
 
-1. **Install dependencies**
-   ```bash
-   npm install
-   cd server && npm install
-   ```
+This platform includes comprehensive monitoring and observability:
 
-2. **Start PostgreSQL and Redis**
-   ```bash
-   # Using Docker for databases only
-   docker-compose up -d postgres redis
-   
-   # Or install PostgreSQL and Redis locally
-   ```
+- **Structured JSON Logging**: Pino with automatic PII redaction
+- **Health Check Endpoints**: `/api/health`, `/api/ready`, `/api/live`
+- **Prometheus Metrics**: `/metrics` endpoint for scraping
+- **Error Tracking**: Sentry integration (optional)
+- **Performance Monitoring**: Slow query detection and tracking
+- **Alerting**: Slack and PagerDuty integration
+- **Dashboards**: Pre-built Grafana dashboards
 
-3. **Configure environment**
-   ```bash
-   cp .env.local .env
-   # Update DATABASE_URL, REDIS_HOST, etc.
-   ```
+**Key Monitoring Endpoints**:
+- `GET /api/health` - Complete health status with DB/Redis checks
+- `GET /api/ready` - Kubernetes readiness probe
+- `GET /api/live` - Kubernetes liveness probe
+- `GET /metrics` - Prometheus metrics export
 
-4. **Run migrations**
-   ```bash
-   npm run prisma:push
-   ```
+**Documentation**: See [server/MONITORING.md](server/MONITORING.md) for complete guide.
 
-5. **Start development server**
-   ```bash
-   npm run dev
-   ```
+## 🏗️ Architecture
 
-## 🏗 Project Structure
+- **Multi-tenant SaaS**: Organization-based isolation
+- **REST API**: Express.js with middleware-based request processing
+- **Database**: PostgreSQL 15 with Prisma ORM
+- **Cache**: Redis 7 for rate limiting and sessions
+- **Authentication**: JWT with role-based access control (RBAC)
+- **Security**: Helmet, rate limiting, CSRF protection, input sanitization
+- **Monitoring**: Pino logging, Prometheus metrics, Sentry errors
 
-*   `/src` (implied root): React Frontend code.
-*   `/api`: Frontend API client & Mock services.
-*   `/server`: Node.js/Express Backend.
-*   `/prisma`: Database schema.
-*   `/components`: UI Components.
+## 🔐 Security Features
 
-## 🐳 Docker Services
+- **Row-Level Security (RLS)**: Database-level tenant isolation
+- **RBAC**: Fine-grained permission system
+- **Rate Limiting**: Redis-based per-tenant, per-user, and IP-based
+- **CSRF Protection**: Token-based protection for state-changing operations
+- **Input Sanitization**: XSS and SQL injection prevention
+- **Audit Logging**: All sensitive operations logged
+- **JWT Authentication**: Secure token-based auth with refresh tokens
 
-### Application Stack
-- **app**: Node.js backend + frontend (port 3001)
-  - Multi-stage build for optimized production image
-  - Health checks enabled
-  - Volume-mounted uploads directory
+## 📦 Tech Stack
 
-### Infrastructure
-- **postgres**: PostgreSQL 15 database (port 5432)
-  - Persistent data storage
-  - Health checks with pg_isready
-  - Automatic backup-ready
+- **Backend**: Node.js 18+, Express.js
+- **Database**: PostgreSQL 15 (with Prisma ORM)
+- **Cache**: Redis 7
+- **Frontend**: React + Vite + TypeScript
+- **Authentication**: JWT with bcrypt
+- **Monitoring**: Pino (logs), Prometheus (metrics), Sentry (errors), Grafana (dashboards)
+- **Containerization**: Docker + Docker Compose
+- **Security**: Helmet, express-rate-limit, CORS, CSRF protection
 
-- **redis**: Redis 7 cache (port 6379)
-  - Used for rate limiting and session caching
-  - Persistence enabled (saves every 60 seconds)
-  - Health checks enabled
+## 📖 API Documentation
 
-- **pgadmin**: Database management UI (port 5050)
-  - Visual query builder and database explorer
-  - Only enabled in development/staging
-  - Login: admin@hse.digital / admin123 (configurable)
+Comprehensive API documentation available in [API_DOCUMENTATION.md](API_DOCUMENTATION.md).
 
-### Health Checks
-All services include health checks to ensure stability:
-- **App**: HTTP check on `/api/health`
-- **PostgreSQL**: pg_isready command
-- **Redis**: PING command
-- **pgAdmin**: HTTP ping endpoint
+### Core Endpoints
 
-## 🔧 Environment Configuration
+**Authentication**:
+- `POST /api/auth/register` - Register new user
+- `POST /api/auth/login` - Login with credentials
+- `POST /api/auth/refresh` - Refresh access token
 
-Three environment files are provided:
+**Monitoring**:
+- `GET /api/health` - Health check
+- `GET /api/ready` - Readiness probe
+- `GET /api/live` - Liveness probe
+- `GET /metrics` - Prometheus metrics
 
-### `.env.local` (Development)
-- Local development with Docker
-- Test API keys and dummy credentials
-- Ethereal email for testing
+**Resources** (authenticated):
+- Stations: `/api/stations`
+- Audits: `/api/audits`
+- Incidents: `/api/incidents`
+- Work Permits: `/api/work-permits`
+- Contractors: `/api/contractors`
 
-### `.env.staging` (Staging)
-- Pre-production testing environment
-- Managed database and Redis instances
-- Real email service (SendGrid)
-- Stripe test mode
-
-### `.env.production` (Production)
-- Production-ready configuration
-- Strong cryptographic secrets
-- Managed services (AWS RDS, Redis Cloud)
-- Stripe live mode
-- Monitoring and analytics enabled
-
-**⚠️ Security Note**: Never commit `.env.production` with real secrets. Use environment variables or secret management services (AWS Secrets Manager, HashiCorp Vault, etc.).
-
-## 🛡 Security & Architecture
-
-*   **Frontend:** React (Vite) + TypeScript.
-*   **Backend:** Node.js (Express) with Helmet security headers and Rate Limiting.
-*   **Database:** PostgreSQL with Row-Level Security (RLS) for multi-tenancy.
-*   **Auth:** JWT-based authentication with refresh tokens.
-*   **Caching:** Redis for rate limiting and session management.
-*   **Containerization:** Docker multi-stage builds for optimized production images.
-
-## 🔍 Troubleshooting
-
-### Common Issues
-
-**Services won't start**
-```bash
-# Check if ports are already in use
-lsof -i :3001  # App
-lsof -i :5432  # PostgreSQL
-lsof -i :6379  # Redis
-lsof -i :5050  # pgAdmin
-
-# Clean and restart
-npm run docker:clean
-npm run docker:up
+All authenticated endpoints require:
+```
+Authorization: Bearer <jwt-token>
+x-tenant-id: <organization-id>
 ```
 
-**Database connection errors**
-```bash
-# Verify PostgreSQL is healthy
-docker-compose ps
-npm run docker:logs:db
-
-# Reset database
-npm run docker:down
-docker volume rm hse_postgres_data
-npm run docker:up
-```
-
-**Can't connect to pgAdmin**
-- Default login: `admin@hse.digital` / `admin123`
-- First time: Add server manually
-  - Host: `postgres` (container name)
-  - Port: `5432`
-  - Username: `hse_admin`
-  - Password: `dev_password_123`
-
-**Redis connection errors**
-```bash
-# Test Redis connection
-docker-compose exec redis redis-cli ping
-# Should return: PONG
-```
-
-### Health Check Endpoints
+## 🧪 Testing
 
 ```bash
-# Application health
-curl http://localhost:3001/api/health
+# Run all tests
+cd server && npm test
 
-# Expected response:
-# {"status":"online","db":"connected","mode":"development"}
+# Run specific test suite
+npm run test:tenant
+npm run test:tenant:integration
 ```
 
 ## 🚢 Deployment
 
-### Building for Production
+### Docker Production Build
 
 ```bash
-# Build production Docker image
+# Build production image
 docker build -t hse-digital:latest .
 
-# Test production build locally
-docker run -p 3001:3001 --env-file .env.production hse-digital:latest
+# Or with docker-compose
+npm run docker:build
 ```
 
-### Environment-Specific Deployment
+### Environment Variables
 
-**Staging**
-```bash
-docker-compose --env-file .env.staging up -d
-```
-
-**Production**
-```bash
-# Use managed services for database and Redis
-# Deploy container to cloud platform (AWS ECS, DigitalOcean, Railway, etc.)
-docker-compose --env-file .env.production up -d
-```
-
-### Database Migrations
+Required environment variables for production:
 
 ```bash
-# Development
-npm run prisma:push
+# Database
+DATABASE_URL=postgresql://user:pass@host:5432/database
 
-# Production (use migrations instead of push)
-npx prisma migrate deploy
+# JWT Secrets (MUST CHANGE IN PRODUCTION)
+JWT_SECRET=your-secure-secret
+REFRESH_SECRET=your-secure-refresh-secret
+
+# Redis
+REDIS_HOST=redis-host
+REDIS_PORT=6379
+REDIS_PASSWORD=your-redis-password
+
+# Monitoring (Optional but Recommended)
+SENTRY_DSN=https://your-sentry-dsn
+LOG_LEVEL=info
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK
+
+# See server/.env.example for complete list
 ```
 
-## 🎯 Mission Roadmap (V1 to Launch)
+### Kubernetes Deployment
 
-We are currently transitioning from **Build** to **Launch Readiness**.
+The application includes health check endpoints for Kubernetes:
 
-### ✅ 3. Architecture & Technical Foundation
-- [x] Frontend Stack: React / Vite / Tailwind.
-- [x] Backend Stack: Node.js / Express.
-- [x] Multi-tenancy: Organization-based isolation wired into API context.
+```yaml
+livenessProbe:
+  httpGet:
+    path: /api/live
+    port: 3001
+  initialDelaySeconds: 30
+  periodSeconds: 10
 
-### ✅ 4. Development & CI/CD Pipeline
-- [x] Linting & Basic Tests setup.
-- [x] Monorepo structure prepared.
-
-### ✅ 5. V1 Build & Internal QA
-- [x] **Authentication**: JWT Login & Sign Up flows.
-- [x] **Core Features**: Audits, Checklists, Incidents, Permits.
-- [x] **Roles**: Admin, Manager, Auditor, Contractor.
-
-### 🔄 6. Beta Launch & Customer Feedback Loop
-- [ ] Deploy to staging environment (Vercel/Render).
-- [ ] Instrument analytics (PostHog/Amplitude).
-
-### 🔄 7. Monetization & Billing Setup
-- [x] **Pricing UI**: Plans displayed in Settings.
-- [x] **Billing Flow**: Frontend connected to Backend API.
-- [ ] **Stripe**: Replace backend mock `paymentService` with real Stripe SDK.
-
-### 🔄 8. Security, Compliance & Trust Layer
-- [x] **Security Headers**: Helmet & Rate Limiting configured.
-- [x] **Row-Level Security**: PostgreSQL RLS policies for database-level tenant isolation.
-- [ ] **Database**: Provision managed PostgreSQL (AWS RDS).
-- [ ] **Backups**: Configure automated daily backups.
-
-### 🔜 9. Launch Readiness & GTM Execution
-- [ ] SEO Landing Pages (deployed).
-- [ ] Onboarding Email Flows (SendGrid integration).
-
-### 🔜 10. Growth & Scale Enablement
-- [ ] Churn recovery workflows.
-- [ ] Scale infrastructure based on load.
+readinessProbe:
+  httpGet:
+    path: /api/ready
+    port: 3001
+  initialDelaySeconds: 10
+  periodSeconds: 5
+```
 
 ## 📚 Documentation
 
-*   **[Architecture Blueprint](docs/architecture.md)**: Technical foundation.
-*   **[API Specification](docs/openapi.yaml)**: REST API endpoints.
-*   **[Database Schema](docs/schema.sql)**: SQL structure.
-*   **[RLS Architecture](docs/RLS_ARCHITECTURE.md)**: Row-Level Security implementation.
-*   **[Tenant Architecture](server/TENANT_ARCHITECTURE.md)**: Multi-tenancy design.
+- [API Documentation](API_DOCUMENTATION.md)
+- [Monitoring & Observability](server/MONITORING.md)
+- [Security Guide](server/SECURITY.md)
+- [Tenant Architecture](server/TENANT_ARCHITECTURE.md)
+- [Docker Setup](DOCKER_SETUP.md)
+- [Agent Guide](AGENTS.md)
 
----
+## 🛠️ Development
 
-## 📋 Multi-Tenant SaaS Audit & Implementation Backlog
+### Local Development
 
-A comprehensive audit has been conducted to identify missing components required for a production-ready multi-tenant SaaS application.
+```bash
+# Install dependencies
+cd server && npm install
 
-### Audit Documents
+# Copy environment file
+cp .env.example .env
 
-- **[SaaS Audit Report](SAAS_AUDIT_REPORT.md)** - Comprehensive audit of missing components (32 identified gaps)
-- **[Prioritized Backlog Part 1](PRIORITIZED_BACKLOG_PART1.md)** - Items 1-20 (Foundation, Multi-Tenancy, Auth)
-- **[Prioritized Backlog Part 2](PRIORITIZED_BACKLOG_PART2.md)** - Items 21-48 (Billing, Rate Limiting, Security)
-- **[Prioritized Backlog Part 3](PRIORITIZED_BACKLOG_PART3.md)** - Items 49-77 (Infrastructure, Admin, Testing)
+# Start development server
+npm run dev
+```
 
-### Key Audit Findings
+### Docker Management Commands
 
-- **Total Work Items:** 77 implementation-ready tasks
-- **Priority Breakdown:**
-  - P0 Critical: 15 items (blockers)
-  - P1 High: 28 items (production-ready requirements)
-  - P2 Medium: 27 items (operational efficiency)
-  - P3 Low: 7 items (nice-to-have enhancements)
-- **Timeline:** 4-6 months with 3-5 developer team
-- **MVP Timeline:** 2-3 months focusing on 30 critical items
+```bash
+npm run docker:up          # Start all services
+npm run docker:down        # Stop all services
+npm run docker:logs        # View all logs
+npm run docker:logs:app    # View app logs
+npm run docker:logs:db     # View database logs
+npm run docker:logs:redis  # View Redis logs
+npm run docker:build       # Rebuild containers
+npm run docker:restart     # Restart services
+npm run docker:clean       # Clean all volumes
+npm run docker:ps          # List containers
+```
 
-### Implementation Phases
+### Database Management
 
-1. **Phase 0:** Foundation & Technology Selection
-2. **Phase 1:** Core Multi-Tenancy
-3. **Phase 2:** Authentication & Authorization
-4. **Phase 3:** Subscription & Billing
-5. **Phase 4:** API Rate Limiting
-6. **Phase 5:** Resource Isolation & Configuration
-7. **Phase 6:** Security & Compliance
-8. **Phase 7:** Infrastructure & Operations
-9. **Phase 8:** Admin Tools & Support
-10. **Phase 9:** Testing & Quality Assurance
-11. **Phase 10:** Optional Enhancements
+```bash
+# Generate Prisma client
+npm run prisma:generate
 
-See the detailed audit report and backlog files for complete implementation guidance.
+# Push schema to database
+npm run prisma:push
+
+# Run migrations
+npm run prisma:migrate
+
+# Seed database
+npm run seed
+```
+
+## 🤝 Contributing
+
+1. Follow existing code style and conventions
+2. Write tests for new features
+3. Update documentation as needed
+4. Use conventional commit messages
+
+## 📄 License
+
+Proprietary - All rights reserved
+
+## 🔗 Resources
+
+- [Prisma Documentation](https://www.prisma.io/docs)
+- [Express.js Guide](https://expressjs.com/)
+- [Docker Documentation](https://docs.docker.com/)
+- [Prometheus Documentation](https://prometheus.io/docs/)
+- [Grafana Documentation](https://grafana.com/docs/)
+- [Sentry Documentation](https://docs.sentry.io/)

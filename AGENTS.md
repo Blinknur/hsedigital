@@ -35,7 +35,7 @@ npm run lint
 docker-compose exec app npm test
 
 # Local tests
-npm test
+cd server && npm test
 ```
 
 **Dev Server:**
@@ -71,6 +71,7 @@ npm run docker:ps          # List containers
 - **Authentication:** JWT
 - **Containerization:** Docker + Docker Compose
 - **Security:** Helmet, express-rate-limit, CORS
+- **Monitoring:** Pino (logging), Prometheus (metrics), Sentry (errors), Grafana (dashboards)
 
 ## Architecture
 - **Structure:** Multi-tenant SaaS with organization-based isolation
@@ -85,6 +86,9 @@ npm run docker:ps          # List containers
 - **postgres:** PostgreSQL database (port 5432)
 - **redis:** Redis cache (port 6379)
 - **pgadmin:** Database management UI (port 5050)
+- **prometheus:** Metrics collection (port 9090) - optional
+- **grafana:** Monitoring dashboards (port 3000) - optional
+- **loki:** Log aggregation (port 3100) - optional
 
 ## Code Style
 - Follow existing conventions in the codebase

@@ -79,3 +79,8 @@ tmp/
 # Testing
 test-results/
 coverage/
+
+# Monitoring & Observability
+prometheus_data/
+grafana_data/
+loki_data/
