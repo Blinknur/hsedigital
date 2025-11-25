@@ -84,3 +84,8 @@ coverage/
 prometheus_data/
 grafana_data/
 loki_data/
+
+# Kubernetes secrets (if generated locally)
+k8s/secrets/*.yaml
+!k8s/secrets/.gitkeep
+k8s/overlays/*/secrets.yaml

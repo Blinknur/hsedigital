@@ -1,0 +1,39 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: hse-staging
+
+bases:
+  - ../../base
+
+namePrefix: staging-
+
+commonLabels:
+  environment: staging
+
+replicas:
+  - name: hse-app
+    count: 2
+
+patchesStrategicMerge:
+  - deployment-patch.yaml
+  - configmap-patch.yaml
+  - ingress-patch.yaml
+  - hpa-patch.yaml
+
+images:
+  - name: app-image
+    newName: ghcr.io/your-org/hse-digital
+    newTag: staging
+
+configMapGenerator:
+  - name: hse-config
+    behavior: merge
+    literals:
+      - NODE_ENV=staging
+      - CLIENT_URL=https://staging.hse.digital
+      - CORS_ORIGIN=https://staging.hse.digital
+
+secretGenerator:
+  - name: hse-secrets
+    env: secrets.env

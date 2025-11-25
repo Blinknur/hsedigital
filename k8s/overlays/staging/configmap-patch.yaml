@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hse-config
+data:
+  NODE_ENV: "staging"
+  CLIENT_URL: "https://staging.hse.digital"
+  CORS_ORIGIN: "https://staging.hse.digital"

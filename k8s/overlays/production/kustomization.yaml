@@ -1,0 +1,39 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: hse-production
+
+bases:
+  - ../../base
+
+namePrefix: prod-
+
+commonLabels:
+  environment: production
+
+replicas:
+  - name: hse-app
+    count: 3
+
+patchesStrategicMerge:
+  - deployment-patch.yaml
+  - configmap-patch.yaml
+  - ingress-patch.yaml
+  - hpa-patch.yaml
+
+images:
+  - name: app-image
+    newName: ghcr.io/your-org/hse-digital
+    newTag: latest
+
+configMapGenerator:
+  - name: hse-config
+    behavior: merge
+    literals:
+      - NODE_ENV=production
+      - CLIENT_URL=https://hse.digital
+      - CORS_ORIGIN=https://hse.digital,https://www.hse.digital
+
+secretGenerator:
+  - name: hse-secrets
+    env: secrets.env

@@ -1,0 +1,52 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migration
+  labels:
+    app: hse-migration
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: hse-migration
+    spec:
+      serviceAccountName: hse-app
+      restartPolicy: OnFailure
+      containers:
+        - name: migration
+          image: app-image
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Starting database migration..."
+              npx prisma generate
+              npx prisma db push --accept-data-loss
+              echo "Migration completed successfully"
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: hse-secrets
+                  key: database-url
+          envFrom:
+            - configMapRef:
+                name: hse-config
+            - secretRef:
+                name: hse-secrets
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL

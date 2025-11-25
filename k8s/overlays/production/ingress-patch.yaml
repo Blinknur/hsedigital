@@ -1,0 +1,31 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hse-ingress
+spec:
+  tls:
+    - hosts:
+        - hse.digital
+        - www.hse.digital
+      secretName: hse-prod-tls-cert
+  rules:
+    - host: hse.digital
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hse-app-service
+                port:
+                  number: 80
+    - host: www.hse.digital
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hse-app-service
+                port:
+                  number: 80
