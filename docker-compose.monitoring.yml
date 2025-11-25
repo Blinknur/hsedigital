@@ -112,9 +112,12 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin123
       - GF_INSTALL_PLUGINS=
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
     volumes:
       - grafana_data:/var/lib/grafana
       - ./server/monitoring/grafana:/etc/grafana/provisioning/dashboards
+      - ./server/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./server/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
     depends_on:
       - prometheus
     networks:

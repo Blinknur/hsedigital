@@ -1,0 +1,243 @@
+{
+  "dashboard": {
+    "title": "HSE Digital - Tenant Performance & SLA Monitoring",
+    "uid": "hse-tenant-performance",
+    "version": 1,
+    "timezone": "browser",
+    "editable": true,
+    "graphTooltip": 1,
+    "tags": ["tenant", "performance", "sla", "metrics"],
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "templating": {
+      "list": [
+        {
+          "name": "tenant_id",
+          "type": "query",
+          "label": "Tenant/Organization",
+          "query": "label_values(hse_digital_tenant_performance_score, tenant_id)",
+          "refresh": 1,
+          "multi": true,
+          "includeAll": true,
+          "allValue": ".*"
+        },
+        {
+          "name": "interval",
+          "type": "interval",
+          "label": "Time Interval",
+          "auto": true,
+          "auto_count": 30,
+          "auto_min": "10s",
+          "options": ["1m", "5m", "10m", "30m", "1h"]
+        }
+      ]
+    },
+    "panels": [
+      {
+        "title": "Performance Overview",
+        "type": "row",
+        "id": 100,
+        "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 },
+        "collapsed": false
+      },
+      {
+        "title": "Performance Score by Tenant",
+        "type": "gauge",
+        "id": 1,
+        "gridPos": { "x": 0, "y": 1, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "hse_digital_tenant_performance_score{tenant_id=~\"$tenant_id\"}",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": 0, "color": "red" },
+                { "value": 50, "color": "yellow" },
+                { "value": 70, "color": "green" },
+                { "value": 90, "color": "blue" }
+              ]
+            },
+            "unit": "percent"
+          }
+        }
+      },
+      {
+        "title": "Performance Score Trend",
+        "type": "timeseries",
+        "id": 2,
+        "gridPos": { "x": 12, "y": 1, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "hse_digital_tenant_performance_score{tenant_id=~\"$tenant_id\"}",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 100,
+            "unit": "percent"
+          }
+        }
+      },
+      {
+        "title": "Response Time Percentiles",
+        "type": "row",
+        "id": 101,
+        "gridPos": { "x": 0, "y": 9, "w": 24, "h": 1 },
+        "collapsed": false
+      },
+      {
+        "title": "p50 Response Time",
+        "type": "timeseries",
+        "id": 3,
+        "gridPos": { "x": 0, "y": 10, "w": 8, "h": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(hse_digital_tenant_latency_seconds_bucket{tenant_id=~\"$tenant_id\"}[$interval])) by (tenant_id, le))",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "title": "p95 Response Time",
+        "type": "timeseries",
+        "id": 4,
+        "gridPos": { "x": 8, "y": 10, "w": 8, "h": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(hse_digital_tenant_latency_seconds_bucket{tenant_id=~\"$tenant_id\"}[$interval])) by (tenant_id, le))",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "title": "p99 Response Time",
+        "type": "timeseries",
+        "id": 5,
+        "gridPos": { "x": 16, "y": 10, "w": 8, "h": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(hse_digital_tenant_latency_seconds_bucket{tenant_id=~\"$tenant_id\"}[$interval])) by (tenant_id, le))",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "title": "Error Rates & Reliability",
+        "type": "row",
+        "id": 102,
+        "gridPos": { "x": 0, "y": 18, "w": 24, "h": 1 },
+        "collapsed": false
+      },
+      {
+        "title": "Error Rate by Tenant",
+        "type": "timeseries",
+        "id": 6,
+        "gridPos": { "x": 0, "y": 19, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(hse_digital_tenant_errors_total{tenant_id=~\"$tenant_id\"}[$interval])) by (tenant_id)",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ]
+      },
+      {
+        "title": "Error Rate Percentage",
+        "type": "timeseries",
+        "id": 7,
+        "gridPos": { "x": 12, "y": 19, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "(sum(rate(hse_digital_tenant_errors_total{tenant_id=~\"$tenant_id\"}[$interval])) by (tenant_id) / sum(rate(hse_digital_tenant_api_calls_total{tenant_id=~\"$tenant_id\"}[$interval])) by (tenant_id)) * 100",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent"
+          }
+        }
+      },
+      {
+        "title": "Success Rate (SLA)",
+        "type": "gauge",
+        "id": 8,
+        "gridPos": { "x": 0, "y": 27, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "((sum(rate(hse_digital_tenant_api_calls_total{tenant_id=~\"$tenant_id\"}[$interval])) by (tenant_id) - sum(rate(hse_digital_tenant_errors_total{tenant_id=~\"$tenant_id\"}[$interval])) by (tenant_id)) / sum(rate(hse_digital_tenant_api_calls_total{tenant_id=~\"$tenant_id\"}[$interval])) by (tenant_id)) * 100",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 100,
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": 0, "color": "red" },
+                { "value": 95, "color": "yellow" },
+                { "value": 99, "color": "green" }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "title": "Quota Usage",
+        "type": "gauge",
+        "id": 9,
+        "gridPos": { "x": 12, "y": 27, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "hse_digital_tenant_quota_usage_percent{tenant_id=~\"$tenant_id\"}",
+            "legendFormat": "{{tenant_id}} - {{quota_type}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 100,
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": 0, "color": "green" },
+                { "value": 70, "color": "yellow" },
+                { "value": 90, "color": "red" }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}

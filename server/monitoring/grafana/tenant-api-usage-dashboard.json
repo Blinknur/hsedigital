@@ -1,0 +1,277 @@
+{
+  "dashboard": {
+    "title": "HSE Digital - Tenant API Usage Patterns",
+    "uid": "hse-tenant-api-usage",
+    "version": 1,
+    "timezone": "browser",
+    "editable": true,
+    "graphTooltip": 1,
+    "tags": ["tenant", "api", "usage", "patterns"],
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "templating": {
+      "list": [
+        {
+          "name": "tenant_id",
+          "type": "query",
+          "label": "Tenant/Organization",
+          "query": "label_values(hse_digital_tenant_api_calls_total, tenant_id)",
+          "refresh": 1,
+          "multi": true,
+          "includeAll": true,
+          "allValue": ".*"
+        },
+        {
+          "name": "endpoint",
+          "type": "query",
+          "label": "Endpoint",
+          "query": "label_values(hse_digital_tenant_api_calls_total{tenant_id=~\"$tenant_id\"}, endpoint)",
+          "refresh": 1,
+          "multi": true,
+          "includeAll": true,
+          "allValue": ".*"
+        },
+        {
+          "name": "interval",
+          "type": "interval",
+          "label": "Time Interval",
+          "auto": true,
+          "auto_count": 30,
+          "auto_min": "10s",
+          "options": ["1m", "5m", "10m", "30m", "1h", "6h", "12h", "1d"]
+        }
+      ]
+    },
+    "panels": [
+      {
+        "title": "API Usage Overview",
+        "type": "row",
+        "id": 100,
+        "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 },
+        "collapsed": false
+      },
+      {
+        "title": "Total API Calls by Tenant",
+        "type": "timeseries",
+        "id": 1,
+        "gridPos": { "x": 0, "y": 1, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(hse_digital_tenant_api_calls_total{tenant_id=~\"$tenant_id\", endpoint=~\"$endpoint\"}[$interval])) by (tenant_id)",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ]
+      },
+      {
+        "title": "API Calls by HTTP Method",
+        "type": "piechart",
+        "id": 2,
+        "gridPos": { "x": 12, "y": 1, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(increase(hse_digital_tenant_api_calls_total{tenant_id=~\"$tenant_id\", endpoint=~\"$endpoint\"}[24h])) by (method)",
+            "legendFormat": "{{method}}"
+          }
+        ]
+      },
+      {
+        "title": "Top 10 Most Called Endpoints",
+        "type": "bargauge",
+        "id": 3,
+        "gridPos": { "x": 0, "y": 9, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "topk(10, sum(increase(hse_digital_tenant_api_calls_total{tenant_id=~\"$tenant_id\"}[1h])) by (endpoint))",
+            "legendFormat": "{{endpoint}}"
+          }
+        ],
+        "options": {
+          "orientation": "horizontal",
+          "displayMode": "gradient"
+        }
+      },
+      {
+        "title": "API Call Status Codes",
+        "type": "timeseries",
+        "id": 4,
+        "gridPos": { "x": 12, "y": 9, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(hse_digital_tenant_api_calls_total{tenant_id=~\"$tenant_id\", endpoint=~\"$endpoint\"}[$interval])) by (status_code)",
+            "legendFormat": "{{status_code}}"
+          }
+        ]
+      },
+      {
+        "title": "Performance Metrics",
+        "type": "row",
+        "id": 101,
+        "gridPos": { "x": 0, "y": 17, "w": 24, "h": 1 },
+        "collapsed": false
+      },
+      {
+        "title": "Response Time Percentiles (p50, p95, p99)",
+        "type": "timeseries",
+        "id": 5,
+        "gridPos": { "x": 0, "y": 18, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(hse_digital_tenant_latency_seconds_bucket{tenant_id=~\"$tenant_id\", endpoint=~\"$endpoint\"}[$interval])) by (tenant_id, le))",
+            "legendFormat": "{{tenant_id}} - p50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(hse_digital_tenant_latency_seconds_bucket{tenant_id=~\"$tenant_id\", endpoint=~\"$endpoint\"}[$interval])) by (tenant_id, le))",
+            "legendFormat": "{{tenant_id}} - p95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(hse_digital_tenant_latency_seconds_bucket{tenant_id=~\"$tenant_id\", endpoint=~\"$endpoint\"}[$interval])) by (tenant_id, le))",
+            "legendFormat": "{{tenant_id}} - p99"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "title": "Error Rate by Tenant",
+        "type": "timeseries",
+        "id": 6,
+        "gridPos": { "x": 12, "y": 18, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(hse_digital_tenant_errors_total{tenant_id=~\"$tenant_id\"}[$interval])) by (tenant_id, error_type)",
+            "legendFormat": "{{tenant_id}} - {{error_type}}"
+          }
+        ]
+      },
+      {
+        "title": "Requests Per Minute",
+        "type": "stat",
+        "id": 7,
+        "gridPos": { "x": 0, "y": 26, "w": 6, "h": 4 },
+        "targets": [
+          {
+            "expr": "sum(rate(hse_digital_tenant_api_calls_total{tenant_id=~\"$tenant_id\"}[1m])) * 60"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value"
+        }
+      },
+      {
+        "title": "Total Requests (24h)",
+        "type": "stat",
+        "id": 8,
+        "gridPos": { "x": 6, "y": 26, "w": 6, "h": 4 },
+        "targets": [
+          {
+            "expr": "sum(increase(hse_digital_tenant_api_calls_total{tenant_id=~\"$tenant_id\"}[24h]))"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "background"
+        }
+      },
+      {
+        "title": "Average Response Time",
+        "type": "stat",
+        "id": 9,
+        "gridPos": { "x": 12, "y": 26, "w": 6, "h": 4 },
+        "targets": [
+          {
+            "expr": "sum(rate(hse_digital_tenant_latency_seconds_sum{tenant_id=~\"$tenant_id\"}[$interval])) / sum(rate(hse_digital_tenant_latency_seconds_count{tenant_id=~\"$tenant_id\"}[$interval]))"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        },
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value"
+        }
+      },
+      {
+        "title": "Error Rate %",
+        "type": "stat",
+        "id": 10,
+        "gridPos": { "x": 18, "y": 26, "w": 6, "h": 4 },
+        "targets": [
+          {
+            "expr": "(sum(rate(hse_digital_tenant_errors_total{tenant_id=~\"$tenant_id\"}[$interval])) / sum(rate(hse_digital_tenant_api_calls_total{tenant_id=~\"$tenant_id\"}[$interval]))) * 100"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent"
+          }
+        },
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value"
+        }
+      },
+      {
+        "title": "Endpoint Analysis",
+        "type": "row",
+        "id": 102,
+        "gridPos": { "x": 0, "y": 30, "w": 24, "h": 1 },
+        "collapsed": false
+      },
+      {
+        "title": "Endpoint Usage Table",
+        "type": "table",
+        "id": 11,
+        "gridPos": { "x": 0, "y": 31, "w": 24, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(increase(hse_digital_tenant_api_calls_total{tenant_id=~\"$tenant_id\", endpoint=~\"$endpoint\"}[24h])) by (tenant_id, endpoint, method)",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "options": {
+          "showHeader": true,
+          "sortBy": [
+            {
+              "displayName": "Value",
+              "desc": true
+            }
+          ]
+        }
+      },
+      {
+        "title": "Peak Usage Times",
+        "type": "timeseries",
+        "id": 12,
+        "gridPos": { "x": 0, "y": 39, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(hse_digital_tenant_api_calls_total{tenant_id=~\"$tenant_id\"}[5m])) by (tenant_id)",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ]
+      },
+      {
+        "title": "Concurrent Users",
+        "type": "timeseries",
+        "id": 13,
+        "gridPos": { "x": 12, "y": 39, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "hse_digital_tenant_concurrent_users{tenant_id=~\"$tenant_id\"}",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ]
+      }
+    ]
+  }
+}

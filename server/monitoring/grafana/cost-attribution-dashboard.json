@@ -1,0 +1,310 @@
+{
+  "dashboard": {
+    "title": "HSE Digital - Cost Attribution",
+    "uid": "hse-cost-attribution",
+    "version": 1,
+    "timezone": "browser",
+    "editable": true,
+    "graphTooltip": 1,
+    "tags": ["cost", "billing", "attribution"],
+    "time": {
+      "from": "now-30d",
+      "to": "now"
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "tenant_id",
+          "type": "query",
+          "label": "Tenant/Organization",
+          "query": "label_values(hse_digital_tenant_resource_cost_estimate, tenant_id)",
+          "refresh": 1,
+          "multi": true,
+          "includeAll": true,
+          "allValue": ".*"
+        }
+      ]
+    },
+    "panels": [
+      {
+        "title": "Cost Overview",
+        "type": "row",
+        "id": 100,
+        "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 },
+        "collapsed": false
+      },
+      {
+        "title": "Total Estimated Cost by Tenant",
+        "type": "timeseries",
+        "id": 1,
+        "gridPos": { "x": 0, "y": 1, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(hse_digital_tenant_resource_cost_estimate{tenant_id=~\"$tenant_id\"}) by (tenant_id)",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "currencyUSD"
+          }
+        }
+      },
+      {
+        "title": "Cost by Resource Type",
+        "type": "timeseries",
+        "id": 2,
+        "gridPos": { "x": 12, "y": 1, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(hse_digital_tenant_resource_cost_estimate{tenant_id=~\"$tenant_id\"}) by (resource_type)",
+            "legendFormat": "{{resource_type}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "currencyUSD"
+          }
+        }
+      },
+      {
+        "title": "Cost Distribution by Tenant",
+        "type": "piechart",
+        "id": 3,
+        "gridPos": { "x": 0, "y": 9, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(hse_digital_tenant_resource_cost_estimate{tenant_id=~\"$tenant_id\"}) by (tenant_id)",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ],
+        "options": {
+          "legend": { "displayMode": "table", "placement": "right" },
+          "pieType": "pie"
+        }
+      },
+      {
+        "title": "Monthly Cost Trend",
+        "type": "timeseries",
+        "id": 4,
+        "gridPos": { "x": 12, "y": 9, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(hse_digital_tenant_resource_cost_estimate{tenant_id=~\"$tenant_id\"}) by (tenant_id)",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "currencyUSD"
+          }
+        }
+      },
+      {
+        "title": "API Usage Costs",
+        "type": "row",
+        "id": 101,
+        "gridPos": { "x": 0, "y": 17, "w": 24, "h": 1 },
+        "collapsed": false
+      },
+      {
+        "title": "API Call Volume by Tenant",
+        "type": "timeseries",
+        "id": 5,
+        "gridPos": { "x": 0, "y": 18, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(increase(hse_digital_tenant_api_calls_total{tenant_id=~\"$tenant_id\"}[1h])) by (tenant_id)",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ]
+      },
+      {
+        "title": "Estimated API Cost",
+        "type": "stat",
+        "id": 6,
+        "gridPos": { "x": 12, "y": 18, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(increase(hse_digital_tenant_api_calls_total{tenant_id=~\"$tenant_id\"}[30d])) by (tenant_id) * 0.0001",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "currencyUSD"
+          }
+        },
+        "options": {
+          "graphMode": "area",
+          "colorMode": "background"
+        }
+      },
+      {
+        "title": "Storage Costs",
+        "type": "row",
+        "id": 102,
+        "gridPos": { "x": 0, "y": 26, "w": 24, "h": 1 },
+        "collapsed": false
+      },
+      {
+        "title": "Data Storage by Tenant (GB)",
+        "type": "timeseries",
+        "id": 7,
+        "gridPos": { "x": 0, "y": 27, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(hse_digital_tenant_data_storage_bytes{tenant_id=~\"$tenant_id\"}) by (tenant_id) / 1024 / 1024 / 1024",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "decgbytes"
+          }
+        }
+      },
+      {
+        "title": "Estimated Storage Cost",
+        "type": "stat",
+        "id": 8,
+        "gridPos": { "x": 12, "y": 27, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "(sum(hse_digital_tenant_data_storage_bytes{tenant_id=~\"$tenant_id\"}) by (tenant_id) / 1024 / 1024 / 1024) * 0.10",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "currencyUSD"
+          }
+        },
+        "options": {
+          "graphMode": "area",
+          "colorMode": "background"
+        }
+      },
+      {
+        "title": "Database Costs",
+        "type": "row",
+        "id": 103,
+        "gridPos": { "x": 0, "y": 35, "w": 24, "h": 1 },
+        "collapsed": false
+      },
+      {
+        "title": "Database Operations by Tenant",
+        "type": "timeseries",
+        "id": 9,
+        "gridPos": { "x": 0, "y": 36, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(increase(hse_digital_tenant_database_operations_total{tenant_id=~\"$tenant_id\"}[1h])) by (tenant_id)",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ]
+      },
+      {
+        "title": "Estimated Database Cost",
+        "type": "stat",
+        "id": 10,
+        "gridPos": { "x": 12, "y": 36, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(increase(hse_digital_tenant_database_operations_total{tenant_id=~\"$tenant_id\"}[30d])) by (tenant_id) * 0.0002",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "currencyUSD"
+          }
+        },
+        "options": {
+          "graphMode": "area",
+          "colorMode": "background"
+        }
+      },
+      {
+        "title": "Data Transfer Costs",
+        "type": "row",
+        "id": 104,
+        "gridPos": { "x": 0, "y": 44, "w": 24, "h": 1 },
+        "collapsed": false
+      },
+      {
+        "title": "Data Transfer by Tenant (GB)",
+        "type": "timeseries",
+        "id": 11,
+        "gridPos": { "x": 0, "y": 45, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(increase(hse_digital_tenant_data_transfer_bytes_total{tenant_id=~\"$tenant_id\"}[1h])) by (tenant_id, direction) / 1024 / 1024 / 1024",
+            "legendFormat": "{{tenant_id}} - {{direction}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "decgbytes"
+          }
+        }
+      },
+      {
+        "title": "Estimated Data Transfer Cost",
+        "type": "stat",
+        "id": 12,
+        "gridPos": { "x": 12, "y": 45, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "(sum(increase(hse_digital_tenant_data_transfer_bytes_total{tenant_id=~\"$tenant_id\"}[30d])) by (tenant_id) / 1024 / 1024 / 1024) * 0.05",
+            "legendFormat": "{{tenant_id}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "currencyUSD"
+          }
+        },
+        "options": {
+          "graphMode": "area",
+          "colorMode": "background"
+        }
+      },
+      {
+        "title": "Cost Summary Table",
+        "type": "table",
+        "id": 13,
+        "gridPos": { "x": 0, "y": 53, "w": 24, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(hse_digital_tenant_resource_cost_estimate{tenant_id=~\"$tenant_id\"}) by (tenant_id, resource_type)",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "options": {
+          "showHeader": true,
+          "sortBy": [
+            {
+              "displayName": "Value",
+              "desc": true
+            }
+          ]
+        },
+        "fieldConfig": {
+          "overrides": [
+            {
+              "matcher": { "id": "byName", "options": "Value" },
+              "properties": [
+                {
+                  "id": "unit",
+                  "value": "currencyUSD"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -95,6 +95,72 @@ export const tenantErrorsTotal = new promClient.Counter({
   labelNames: ['tenant_id', 'error_type']
 });
 
+export const tenantFeatureUsage = new promClient.Counter({
+  name: 'hse_digital_tenant_feature_usage_total',
+  help: 'Total feature usage per tenant',
+  labelNames: ['tenant_id', 'feature', 'action']
+});
+
+export const tenantApiCalls = new promClient.Counter({
+  name: 'hse_digital_tenant_api_calls_total',
+  help: 'Total API calls per tenant by endpoint',
+  labelNames: ['tenant_id', 'endpoint', 'method', 'status_code']
+});
+
+export const tenantDataStorage = new promClient.Gauge({
+  name: 'hse_digital_tenant_data_storage_bytes',
+  help: 'Data storage usage per tenant in bytes',
+  labelNames: ['tenant_id', 'data_type']
+});
+
+export const tenantResourceCost = new promClient.Gauge({
+  name: 'hse_digital_tenant_resource_cost_estimate',
+  help: 'Estimated resource cost per tenant',
+  labelNames: ['tenant_id', 'resource_type']
+});
+
+export const tenantConcurrentUsers = new promClient.Gauge({
+  name: 'hse_digital_tenant_concurrent_users',
+  help: 'Number of concurrent users per tenant',
+  labelNames: ['tenant_id']
+});
+
+export const tenantSubscriptionPlan = new promClient.Gauge({
+  name: 'hse_digital_tenant_subscription_plan',
+  help: 'Tenant subscription plan (0=free, 1=basic, 2=premium, 3=enterprise)',
+  labelNames: ['tenant_id', 'plan']
+});
+
+export const tenantQuotaUsage = new promClient.Gauge({
+  name: 'hse_digital_tenant_quota_usage_percent',
+  help: 'Tenant quota usage percentage',
+  labelNames: ['tenant_id', 'quota_type']
+});
+
+export const tenantDataTransfer = new promClient.Counter({
+  name: 'hse_digital_tenant_data_transfer_bytes_total',
+  help: 'Total data transfer per tenant',
+  labelNames: ['tenant_id', 'direction']
+});
+
+export const tenantCacheOperations = new promClient.Counter({
+  name: 'hse_digital_tenant_cache_operations_total',
+  help: 'Total cache operations per tenant',
+  labelNames: ['tenant_id', 'operation']
+});
+
+export const tenantDatabaseOperations = new promClient.Counter({
+  name: 'hse_digital_tenant_database_operations_total',
+  help: 'Total database operations per tenant',
+  labelNames: ['tenant_id', 'operation_type']
+});
+
+export const tenantPerformanceScore = new promClient.Gauge({
+  name: 'hse_digital_tenant_performance_score',
+  help: 'Tenant performance score (0-100)',
+  labelNames: ['tenant_id']
+});
+
 register.registerMetric(httpRequestDuration);
 register.registerMetric(httpRequestTotal);
 register.registerMetric(httpRequestErrors);
@@ -109,5 +175,16 @@ register.registerMetric(authFailuresTotal);
 register.registerMetric(tenantRequestsTotal);
 register.registerMetric(tenantLatency);
 register.registerMetric(tenantErrorsTotal);
+register.registerMetric(tenantFeatureUsage);
+register.registerMetric(tenantApiCalls);
+register.registerMetric(tenantDataStorage);
+register.registerMetric(tenantResourceCost);
+register.registerMetric(tenantConcurrentUsers);
+register.registerMetric(tenantSubscriptionPlan);
+register.registerMetric(tenantQuotaUsage);
+register.registerMetric(tenantDataTransfer);
+register.registerMetric(tenantCacheOperations);
+register.registerMetric(tenantDatabaseOperations);
+register.registerMetric(tenantPerformanceScore);
 
 export { register };

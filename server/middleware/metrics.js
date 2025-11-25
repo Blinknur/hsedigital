@@ -5,14 +5,21 @@ import {
   activeConnections,
   tenantRequestsTotal,
   tenantLatency,
-  tenantErrorsTotal
+  tenantErrorsTotal,
+  tenantApiCalls,
+  tenantDataTransfer
 } from '../utils/metrics.js';
 
 export const metricsMiddleware = (req, res, next) => {
   const start = Date.now();
-  const tenantId = req.headers['x-tenant-id'] || 'unknown';
+  const tenantId = req.headers['x-tenant-id'] || req.user?.organizationId || 'unknown';
   
   activeConnections.inc({ tenant_id: tenantId });
+
+  const requestSize = parseInt(req.headers['content-length'] || '0', 10);
+  if (requestSize > 0) {
+    tenantDataTransfer.inc({ tenant_id: tenantId, direction: 'inbound' }, requestSize);
+  }
 
   const originalSend = res.send;
   res.send = function(data) {
@@ -29,6 +36,17 @@ export const metricsMiddleware = (req, res, next) => {
     httpRequestTotal.inc(labels);
     tenantRequestsTotal.inc({ tenant_id: tenantId, endpoint: route });
     tenantLatency.observe({ tenant_id: tenantId, endpoint: route }, duration);
+    tenantApiCalls.inc({
+      tenant_id: tenantId,
+      endpoint: route,
+      method: req.method,
+      status_code: res.statusCode
+    });
+
+    const responseSize = Buffer.byteLength(typeof data === 'string' ? data : JSON.stringify(data));
+    if (responseSize > 0) {
+      tenantDataTransfer.inc({ tenant_id: tenantId, direction: 'outbound' }, responseSize);
+    }
 
     if (res.statusCode >= 400) {
       const errorType = res.statusCode >= 500 ? 'server_error' : 'client_error';
