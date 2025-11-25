@@ -1,0 +1,84 @@
+{
+  "plans": {
+    "free": {
+      "name": "Free",
+      "limits": {
+        "stations": 5,
+        "users": 3,
+        "audits_per_month": 10,
+        "incidents_per_month": 20,
+        "work_permits_per_month": 10,
+        "form_definitions": 3,
+        "contractors": 5,
+        "storage_mb": 100
+      },
+      "features": {
+        "ai_assistant": false,
+        "advanced_analytics": false,
+        "sso": false,
+        "custom_branding": false,
+        "api_access": false
+      }
+    },
+    "starter": {
+      "name": "Starter",
+      "limits": {
+        "stations": 25,
+        "users": 10,
+        "audits_per_month": 50,
+        "incidents_per_month": 100,
+        "work_permits_per_month": 50,
+        "form_definitions": 10,
+        "contractors": 20,
+        "storage_mb": 500
+      },
+      "features": {
+        "ai_assistant": true,
+        "advanced_analytics": false,
+        "sso": false,
+        "custom_branding": false,
+        "api_access": false
+      }
+    },
+    "professional": {
+      "name": "Professional",
+      "limits": {
+        "stations": 100,
+        "users": 50,
+        "audits_per_month": 200,
+        "incidents_per_month": 500,
+        "work_permits_per_month": 200,
+        "form_definitions": 50,
+        "contractors": 100,
+        "storage_mb": 2000
+      },
+      "features": {
+        "ai_assistant": true,
+        "advanced_analytics": true,
+        "sso": false,
+        "custom_branding": true,
+        "api_access": true
+      }
+    },
+    "enterprise": {
+      "name": "Enterprise",
+      "limits": {
+        "stations": -1,
+        "users": -1,
+        "audits_per_month": -1,
+        "incidents_per_month": -1,
+        "work_permits_per_month": -1,
+        "form_definitions": -1,
+        "contractors": -1,
+        "storage_mb": -1
+      },
+      "features": {
+        "ai_assistant": true,
+        "advanced_analytics": true,
+        "sso": true,
+        "custom_branding": true,
+        "api_access": true
+      }
+    }
+  }
+}

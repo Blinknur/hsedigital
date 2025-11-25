@@ -40,6 +40,8 @@ import {
 import authRoutes from './routes/auth.js';
 import auditLogsRouter from './routes/auditLogs.js';
 import { startAuditLogCleanupScheduler } from './services/auditLogCleanup.js';
+import { requireQuota, trackUsage, requireFeature } from './middleware/quota.js';
+import { getUsageStats } from './services/quotaService.js';
 
 dotenv.config();
 
@@ -286,6 +288,15 @@ app.get('/api/rbac/roles/me', authenticateToken, userRateLimit, asyncHandler(asy
     res.json(roles);
 }));
 
+// --- USAGE ENDPOINT ---
+app.get('/api/usage/current', authenticateToken, tenantContext, asyncHandler(async (req, res) => {
+    const stats = await getUsageStats(req.tenantId);
+    if (!stats) {
+        return res.status(404).json({ error: 'Organization not found' });
+    }
+    res.json(stats);
+}));
+
 // --- STATIONS ---
 app.get('/api/stations', authenticateToken, tenantContext, tenantRateLimit, requirePermission('stations', 'read'), asyncHandler(async (req, res) => {
     const where = {};
@@ -295,7 +306,7 @@ app.get('/api/stations', authenticateToken, tenantContext, tenantRateLimit, requ
     res.json(stations);
 }));
 
-app.post('/api/stations', authenticateToken, tenantContext, tenantRateLimit, requirePermission('stations', 'write'), validateRequest(stationSchema), asyncHandler(async (req, res) => {
+app.post('/api/stations', authenticateToken, tenantContext, tenantRateLimit, requirePermission('stations', 'write'), validateRequest(stationSchema), requireQuota('stations'), asyncHandler(async (req, res) => {
     const station = await prisma.station.create({
         data: {
             ...req.validatedData,
@@ -334,7 +345,7 @@ app.get('/api/audits', authenticateToken, tenantContext, tenantRateLimit, requir
     res.json(audits);
 }));
 
-app.post('/api/audits', authenticateToken, tenantContext, tenantRateLimit, requirePermission('audits', 'write'), validateRequest(auditSchema), auditLog('audit'), asyncHandler(async (req, res) => {
+app.post('/api/audits', authenticateToken, tenantContext, tenantRateLimit, requirePermission('audits', 'write'), validateRequest(auditSchema), auditLog('audit'), requireQuota('audits'), trackUsage('audits'), asyncHandler(async (req, res) => {
     const audit = await prisma.audit.create({
         data: {
             organizationId: req.tenantId,
@@ -376,7 +387,7 @@ app.get('/api/incidents', authenticateToken, tenantContext, tenantRateLimit, req
     res.json(incidents);
 }));
 
-app.post('/api/incidents', authenticateToken, tenantContext, tenantRateLimit, requirePermission('incidents', 'write'), validateRequest(incidentSchema), asyncHandler(async (req, res) => {
+app.post('/api/incidents', authenticateToken, tenantContext, tenantRateLimit, requirePermission('incidents', 'write'), validateRequest(incidentSchema), requireQuota('incidents'), trackUsage('incidents'), asyncHandler(async (req, res) => {
     const incident = await prisma.incident.create({
         data: {
             organizationId: req.tenantId,
@@ -408,7 +419,7 @@ app.get('/api/work-permits', authenticateToken, tenantContext, tenantRateLimit, 
     res.json(permits);
 }));
 
-app.post('/api/work-permits', authenticateToken, tenantContext, tenantRateLimit, requirePermission('workPermits', 'write'), validateRequest(workPermitSchema), asyncHandler(async (req, res) => {
+app.post('/api/work-permits', authenticateToken, tenantContext, tenantRateLimit, requirePermission('workPermits', 'write'), validateRequest(workPermitSchema), requireQuota('work_permits'), trackUsage('work_permits'), asyncHandler(async (req, res) => {
     const permit = await prisma.workPermit.create({
         data: {
             organizationId: req.tenantId,
@@ -443,7 +454,44 @@ app.get('/api/contractors', authenticateToken, tenantContext, tenantRateLimit, r
     res.json(contractors);
 }));
 
-app.post('/api/contractors', authenticateToken, tenantContext, tenantRateLimit, requirePermission('contractors', 'write'), validateRequest(contractorSchema), asyncHandler(async (req, res) => {
+app.post('/api/contractors', authenticateToken, tenantContext, tenantRateLimit, requirePermission('contractors', 'write'), validateRequest(contractorSchema), requireQuota('contractors'), asyncHandler(async (req, res) => {
+    const contractor = await prisma.contractor.create({
+        data: {
+            organizationId: req.tenantId,
+            ...req.validatedData
+        }
+    });
+    res.status(201).json(contractor);
+}));
+
+// --- USERS ---
+app.get('/api/users', authenticateToken, tenantContext, tenantRateLimit, requirePermission('users', 'read'), asyncHandler(async (req, res) => {
+    const where = { organizationId: req.tenantId };
+    const users = await prisma.user.findMany({ 
+        where,
+        select: { id: true, email: true, name: true, role: true, region: true, createdAt: true, updatedAt: true }
+    });
+    res.json(users);
+}));
+
+app.post('/api/users', authenticateToken, tenantContext, tenantRateLimit, requirePermission('users', 'write'), requireQuota('users'), asyncHandler(async (req, res) => {
+    const { email, name, password, role, region } = req.body;
+    const user = await prisma.user.create({
+        data: {
+            organizationId: req.tenantId,
+            email,
+            name,
+            password,
+            role: role || 'User',
+            region,
+            isEmailVerified: false
+        }
+    });
+    const { password: _, ...userInfo } = user;
+    res.status(201).json(userInfo);
+}));
+
+app.post('/api/contractors', authenticateToken, tenantContext, tenantRateLimit, requirePermission('contractors', 'write'), validateRequest(contractorSchema), requireQuota('contractors'), asyncHandler(async (req, res) => {
     const contractor = await prisma.contractor.create({
         data: {
             organizationId: req.tenantId,
@@ -454,7 +502,7 @@ app.post('/api/contractors', authenticateToken, tenantContext, tenantRateLimit, 
 }));
 
 // --- AI ---
-app.post('/api/ai/generate', authenticateToken, tenantContext, userRateLimit, validateRequest(aiPromptSchema), asyncHandler(async (req, res) => {
+app.post('/api/ai/generate', authenticateToken, tenantContext, userRateLimit, validateRequest(aiPromptSchema), requireFeature('ai_assistant'), asyncHandler(async (req, res) => {
     const { prompt } = req.validatedData;
     try {
         const response = await ai.models.generateContent({
