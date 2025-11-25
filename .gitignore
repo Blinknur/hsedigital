@@ -26,6 +26,8 @@ dist-ssr
 # Environment variables
 .env
 .env.local
+.env.staging
+.env.production
 .env.*.local
 
 # Prisma
@@ -40,3 +42,34 @@ prisma.db-journal
 # Build outputs
 build/
 public/uploads/
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Cache directories
+.cache/
+.npm/
+.pnpm-store/
+
+# Temporary files
+*.tmp
+*.temp
+.temp/
+tmp/

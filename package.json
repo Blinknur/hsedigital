@@ -7,9 +7,23 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
+    "build": "echo 'Build: Using Docker multi-stage build' && docker build -t hse-digital:latest .",
+    "test": "echo 'Tests: Not yet configured' && exit 0",
+    "lint": "echo 'Lint: Not yet configured' && exit 0",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
-    "seed": "node prisma/seed.js"
+    "seed": "node prisma/seed.js",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "docker:logs:app": "docker-compose logs -f app",
+    "docker:logs:db": "docker-compose logs -f postgres",
+    "docker:logs:redis": "docker-compose logs -f redis",
+    "docker:build": "docker-compose build --no-cache",
+    "docker:restart": "docker-compose restart",
+    "docker:clean": "docker-compose down -v",
+    "docker:ps": "docker-compose ps",
+    "docker:health": "docker-compose ps && curl -f http://localhost:3001/api/health || echo 'Services not running'"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
