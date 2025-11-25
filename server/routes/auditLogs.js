@@ -2,6 +2,9 @@ import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authenticateToken, tenantContext } from '../middleware/auth.js';
 import { requirePermission } from '../middleware/rbac.js';
+import { buildCursorPagination, formatCursorResponse, buildOffsetPagination, formatOffsetResponse } from '../utils/pagination.js';
+import { cacheManager } from '../utils/cache.js';
+import { tenantCacheMiddleware, invalidateTenantCacheMiddleware } from '../middleware/caching.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -11,6 +14,7 @@ router.get(
   authenticateToken,
   tenantContext,
   requirePermission('audit_logs', 'read'),
+  tenantCacheMiddleware('audit_logs', { ttl: 180 }),
   async (req, res) => {
     try {
       const {
@@ -19,7 +23,7 @@ router.get(
         entityType,
         startDate,
         endDate,
-        page = 1,
+        cursor,
         limit = 50
       } = req.query;
 
@@ -49,40 +53,32 @@ router.get(
         }
       }
 
-      const skip = (parseInt(page) - 1) * parseInt(limit);
-      const take = parseInt(limit);
+      const paginationOptions = buildCursorPagination({
+        cursor,
+        limit,
+        orderBy: { createdAt: 'desc' },
+        cursorField: 'id'
+      });
 
-      const [logs, total] = await Promise.all([
-        prisma.auditLog.findMany({
-          where,
-          orderBy: { createdAt: 'desc' },
-          skip,
-          take,
-          select: {
-            id: true,
-            organizationId: true,
-            userId: true,
-            action: true,
-            entityType: true,
-            entityId: true,
-            changes: true,
-            ipAddress: true,
-            userAgent: true,
-            createdAt: true
-          }
-        }),
-        prisma.auditLog.count({ where })
-      ]);
-
-      res.json({
-        logs,
-        pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total,
-          totalPages: Math.ceil(total / parseInt(limit))
+      const logs = await prisma.auditLog.findMany({
+        where,
+        ...paginationOptions,
+        select: {
+          id: true,
+          organizationId: true,
+          userId: true,
+          action: true,
+          entityType: true,
+          entityId: true,
+          changes: true,
+          ipAddress: true,
+          userAgent: true,
+          createdAt: true
         }
       });
+
+      const response = formatCursorResponse(logs, limit, 'id');
+      res.json({ logs: response.data, pagination: response.pagination });
     } catch (error) {
       console.error('Error fetching audit logs:', error);
       res.status(500).json({ error: 'Failed to fetch audit logs' });
@@ -95,6 +91,7 @@ router.get(
   authenticateToken,
   tenantContext,
   requirePermission('audit_logs', 'read'),
+  tenantCacheMiddleware('audit_logs_stats', { ttl: 300 }),
   async (req, res) => {
     try {
       const where = {

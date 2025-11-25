@@ -34,6 +34,9 @@ import {
 } from './middleware/validation.js';
 import authRoutes from './routes/auth.js';
 import auditLogsRouter from './routes/auditLogs.js';
+import auditsRouter from './routes/audits.js';
+import incidentsRouter from './routes/incidents.js';
+import organizationsRouter from './routes/organizations.js';
 import { startAuditLogCleanupScheduler } from './services/auditLogCleanup.js';
 import { requireQuota, trackUsage, requireFeature } from './middleware/quota.js';
 import { getUsageStats } from './services/quotaService.js';
@@ -258,6 +261,9 @@ app.get('/api/usage/current', authenticateToken, ...tenantContextWithTracing, as
 // --- BILLING ---
 app.use('/api/billing', authenticateToken, billingRoutes);
 
+// --- ORGANIZATIONS ---
+app.use('/api/organizations', organizationsRouter);
+
 // --- STATIONS ---
 app.get('/api/stations', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('stations', 'read'), asyncHandler(async (req, res) => {
     const where = {};
@@ -296,78 +302,10 @@ app.delete('/api/stations/:id', authenticateToken, ...tenantContextWithTracing, 
 }));
 
 // --- AUDITS ---
-app.get('/api/audits', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('audits', 'read'), asyncHandler(async (req, res) => {
-    const where = { organizationId: req.tenantId };
-    if (req.query.stationId) where.stationId = req.query.stationId;
-    const audits = await prisma.audit.findMany({
-        where,
-        orderBy: { scheduledDate: 'desc' }
-    });
-    res.json(audits);
-}));
-
-app.post('/api/audits', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('audits', 'write'), validateRequest(auditSchema), auditLog('audit'), requireQuota('audits'), trackUsage('audits'), asyncHandler(async (req, res) => {
-    const audit = await prisma.audit.create({
-        data: {
-            organizationId: req.tenantId,
-            ...req.validatedData,
-            scheduledDate: new Date(req.validatedData.scheduledDate),
-            completedDate: req.validatedData.completedDate ? new Date(req.validatedData.completedDate) : null,
-            auditNumber: `AUD-${Date.now()}`
-        }
-    });
-    res.status(201).json(audit);
-}));
-
-app.put('/api/audits/:id', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('audits', 'write'), validateParams(idParamSchema), validateRequest(auditSchema.partial()), captureOriginalEntity('audit'), auditLog('audit'), asyncHandler(async (req, res) => {
-    const { id } = req.params;
-    const updateData = { ...req.validatedData };
-    if (updateData.scheduledDate) updateData.scheduledDate = new Date(updateData.scheduledDate);
-    if (updateData.completedDate) updateData.completedDate = new Date(updateData.completedDate);
-    await prisma.audit.updateMany({ where: { id, organizationId: req.tenantId }, data: updateData });
-    const updated = await prisma.audit.findUnique({ where: { id }});
-    res.json(updated);
-}));
-
-app.delete('/api/audits/:id', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('audits', 'delete'), validateParams(idParamSchema), asyncHandler(async (req, res) => {
-    const { id } = req.params;
-    await prisma.audit.deleteMany({
-        where: { id, organizationId: req.tenantId }
-    });
-    res.json({ message: 'Audit deleted' });
-}));
+app.use('/api/audits', auditsRouter);
 
 // --- INCIDENTS ---
-app.get('/api/incidents', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('incidents', 'read'), asyncHandler(async (req, res) => {
-    const where = { organizationId: req.tenantId };
-    if (req.query.stationId) where.stationId = req.query.stationId;
-    const incidents = await prisma.incident.findMany({
-        where,
-        orderBy: { reportedAt: 'desc' }
-    });
-    res.json(incidents);
-}));
-
-app.post('/api/incidents', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('incidents', 'write'), validateRequest(incidentSchema), requireQuota('incidents'), trackUsage('incidents'), asyncHandler(async (req, res) => {
-    const incident = await prisma.incident.create({
-        data: {
-            organizationId: req.tenantId,
-            reporterId: req.user.id,
-            ...req.validatedData
-        }
-    });
-    res.status(201).json(incident);
-}));
-
-app.put('/api/incidents/:id', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('incidents', 'write'), validateParams(idParamSchema), validateRequest(incidentSchema.partial()), asyncHandler(async (req, res) => {
-    const { id } = req.params;
-    await prisma.incident.updateMany({
-        where: { id, organizationId: req.tenantId },
-        data: req.validatedData
-    });
-    const updated = await prisma.incident.findUnique({ where: { id } });
-    res.json(updated);
-}));
+app.use('/api/incidents', incidentsRouter);
 
 // --- WORK PERMITS ---
 app.get('/api/work-permits', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('workPermits', 'read'), asyncHandler(async (req, res) => {

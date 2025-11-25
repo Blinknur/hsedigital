@@ -1,123 +1,133 @@
 import { PrismaClient } from '@prisma/client';
-import Redis from 'ioredis';
+import { cacheManager } from '../utils/cache.js';
+import { logger } from '../utils/logger.js';
 
 const prisma = new PrismaClient();
 
-const redis = new Redis({
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379'),
-    password: process.env.REDIS_PASSWORD || undefined,
-    retryStrategy: (times) => {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
-    },
-    lazyConnect: true
-});
+const TENANT_CACHE_TTL = 600;
 
-let redisAvailable = false;
+export const getTenantById = async (tenantId) => {
+  const cacheKey = cacheManager.getTenantKey(tenantId, 'organization', '');
+  
+  return cacheManager.getOrFetch(cacheKey, async () => {
+    const tenant = await prisma.organization.findUnique({
+      where: { id: tenantId },
+      select: {
+        id: true,
+        name: true,
+        ownerId: true,
+        subscriptionPlan: true,
+        subscriptionStatus: true,
+        stripeCustomerId: true,
+        stripeSubscriptionId: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+    
+    return tenant;
+  }, TENANT_CACHE_TTL);
+};
 
-redis.connect().then(() => {
-    redisAvailable = true;
-    console.log('✓ Redis connected for tenant caching');
-}).catch((err) => {
-    console.warn('⚠️ Redis connection failed, tenant caching disabled:', err.message);
-    redisAvailable = false;
-});
-
-const TENANT_CACHE_TTL = 300;
-
-export const tenantService = {
-    async validateTenant(organizationId) {
-        if (!organizationId) return false;
-
-        const cacheKey = `tenant:${organizationId}`;
-
-        if (redisAvailable) {
-            try {
-                const cached = await redis.get(cacheKey);
-                if (cached !== null) {
-                    return cached === 'true';
-                }
-            } catch (error) {
-                console.error('Redis get error:', error);
-            }
+export const getTenantWithUsers = async (tenantId) => {
+  const cacheKey = cacheManager.getTenantKey(tenantId, 'organization_users', '');
+  
+  return cacheManager.getOrFetch(cacheKey, async () => {
+    const tenant = await prisma.organization.findUnique({
+      where: { id: tenantId },
+      include: {
+        users: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            createdAt: true
+          }
         }
+      }
+    });
+    
+    return tenant;
+  }, TENANT_CACHE_TTL);
+};
 
-        const organization = await prisma.organization.findUnique({
-            where: { id: organizationId }
-        });
+export const getTenantStations = async (tenantId) => {
+  const cacheKey = cacheManager.getTenantKey(tenantId, 'stations', 'all');
+  
+  return cacheManager.getOrFetch(cacheKey, async () => {
+    const stations = await prisma.station.findMany({
+      where: { organizationId: tenantId, isActive: true },
+      orderBy: { name: 'asc' }
+    });
+    
+    return stations;
+  }, TENANT_CACHE_TTL);
+};
 
-        const isValid = !!organization;
+export const getTenantContractors = async (tenantId) => {
+  const cacheKey = cacheManager.getTenantKey(tenantId, 'contractors', 'all');
+  
+  return cacheManager.getOrFetch(cacheKey, async () => {
+    const contractors = await prisma.contractor.findMany({
+      where: { organizationId: tenantId },
+      orderBy: { name: 'asc' }
+    });
+    
+    return contractors;
+  }, TENANT_CACHE_TTL);
+};
 
-        if (redisAvailable) {
-            try {
-                await redis.setex(cacheKey, TENANT_CACHE_TTL, String(isValid));
-            } catch (error) {
-                console.error('Redis set error:', error);
-            }
-        }
+export const invalidateTenantCache = async (tenantId) => {
+  await cacheManager.invalidateTenantCache(tenantId);
+  logger.info({ tenantId }, 'Tenant cache invalidated');
+};
 
-        return isValid;
-    },
-
-    async invalidateTenantCache(organizationId) {
-        if (!redisAvailable) return;
-        
-        try {
-            const cacheKey = `tenant:${organizationId}`;
-            await redis.del(cacheKey);
-        } catch (error) {
-            console.error('Redis delete error:', error);
-        }
-    },
-
-    async getTenantInfo(organizationId) {
-        const cacheKey = `tenant:info:${organizationId}`;
-
-        if (redisAvailable) {
-            try {
-                const cached = await redis.get(cacheKey);
-                if (cached) {
-                    return JSON.parse(cached);
-                }
-            } catch (error) {
-                console.error('Redis get error:', error);
-            }
-        }
-
-        const organization = await prisma.organization.findUnique({
-            where: { id: organizationId },
-            select: {
-                id: true,
-                name: true,
-                subscriptionPlan: true,
-                createdAt: true
-            }
-        });
-
-        if (!organization) return null;
-
-        if (redisAvailable) {
-            try {
-                await redis.setex(cacheKey, TENANT_CACHE_TTL, JSON.stringify(organization));
-            } catch (error) {
-                console.error('Redis set error:', error);
-            }
-        }
-
-        return organization;
-    },
-
-    async clearAllTenantCache() {
-        if (!redisAvailable) return;
-        
-        try {
-            const keys = await redis.keys('tenant:*');
-            if (keys.length > 0) {
-                await redis.del(...keys);
-            }
-        } catch (error) {
-            console.error('Redis clear error:', error);
-        }
+export const batchGetTenants = async (tenantIds) => {
+  const cacheKeys = tenantIds.map(id => cacheManager.getTenantKey(id, 'organization', ''));
+  const cachedValues = await cacheManager.mget(cacheKeys);
+  
+  const missingIndices = [];
+  const result = new Map();
+  
+  cachedValues.forEach((value, index) => {
+    if (value !== null) {
+      result.set(tenantIds[index], value);
+    } else {
+      missingIndices.push(index);
     }
+  });
+  
+  if (missingIndices.length > 0) {
+    const missingIds = missingIndices.map(i => tenantIds[i]);
+    const tenants = await prisma.organization.findMany({
+      where: { id: { in: missingIds } },
+      select: {
+        id: true,
+        name: true,
+        ownerId: true,
+        subscriptionPlan: true,
+        subscriptionStatus: true,
+        stripeCustomerId: true,
+        stripeSubscriptionId: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+    
+    const cacheEntries = tenants.map(tenant => [
+      cacheManager.getTenantKey(tenant.id, 'organization', ''),
+      tenant
+    ]);
+    
+    if (cacheEntries.length > 0) {
+      await cacheManager.mset(cacheEntries, TENANT_CACHE_TTL);
+    }
+    
+    tenants.forEach(tenant => {
+      result.set(tenant.id, tenant);
+    });
+  }
+  
+  return result;
 };

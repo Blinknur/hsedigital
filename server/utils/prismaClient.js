@@ -1,184 +1,48 @@
 import { PrismaClient } from '@prisma/client';
-import { tenantLogger } from './tenantLogger.js';
+import { logger } from './logger.js';
 
-const TENANT_MODELS = [
-    'station',
-    'contractor',
-    'audit',
-    'formDefinition',
-    'incident',
-    'workPermit'
-];
+const connectionLimit = parseInt(process.env.DATABASE_CONNECTION_LIMIT || '10', 10);
+const connectionTimeout = parseInt(process.env.DATABASE_CONNECTION_TIMEOUT || '5000', 10);
+const poolTimeout = parseInt(process.env.DATABASE_POOL_TIMEOUT || '10000', 10);
 
-function shouldEnforceOrganizationId(model) {
-    return TENANT_MODELS.includes(model);
+const prismaClientSingleton = () => {
+  return new PrismaClient({
+    datasources: {
+      db: {
+        url: process.env.DATABASE_URL
+      }
+    },
+    log: [
+      { level: 'query', emit: 'event' },
+      { level: 'error', emit: 'event' },
+      { level: 'warn', emit: 'event' },
+    ],
+  });
+};
+
+const globalForPrisma = globalThis;
+
+const prisma = globalForPrisma.prisma ?? prismaClientSingleton();
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
 }
 
-export const prisma = new PrismaClient().$extends({
-    query: {
-        $allModels: {
-            async create({ model, args, query }) {
-                if (shouldEnforceOrganizationId(model)) {
-                    const organizationId = global.currentTenantId;
-                    
-                    if (!organizationId) {
-                        const error = new Error(`Tenant isolation violation: CREATE on ${model} without organizationId`);
-                        error.statusCode = 403;
-                        throw error;
-                    }
-
-                    args.data = {
-                        ...args.data,
-                        organizationId
-                    };
-
-                    tenantLogger.logTenantInjection(organizationId, 'CREATE', model);
-                }
-
-                return query(args);
-            },
-
-            async findMany({ model, args, query }) {
-                if (shouldEnforceOrganizationId(model)) {
-                    const organizationId = global.currentTenantId;
-                    
-                    if (!organizationId) {
-                        tenantLogger.logTenantQueryBlock('unknown', null, 'FIND_MANY', model);
-                        return [];
-                    }
-
-                    args.where = {
-                        ...args.where,
-                        organizationId
-                    };
-                }
-
-                return query(args);
-            },
-
-            async findFirst({ model, args, query }) {
-                if (shouldEnforceOrganizationId(model)) {
-                    const organizationId = global.currentTenantId;
-                    
-                    if (!organizationId) {
-                        tenantLogger.logTenantQueryBlock('unknown', null, 'FIND_FIRST', model);
-                        return null;
-                    }
-
-                    args.where = {
-                        ...args.where,
-                        organizationId
-                    };
-                }
-
-                return query(args);
-            },
-
-            async findUnique({ model, args, query }) {
-                if (shouldEnforceOrganizationId(model)) {
-                    const organizationId = global.currentTenantId;
-                    
-                    if (!organizationId) {
-                        tenantLogger.logTenantQueryBlock('unknown', null, 'FIND_UNIQUE', model);
-                        return null;
-                    }
-
-                    args.where = {
-                        ...args.where,
-                        organizationId
-                    };
-                }
-
-                return query(args);
-            },
-
-            async update({ model, args, query }) {
-                if (shouldEnforceOrganizationId(model)) {
-                    const organizationId = global.currentTenantId;
-                    
-                    if (!organizationId) {
-                        const error = new Error(`Tenant isolation violation: UPDATE on ${model} without organizationId`);
-                        error.statusCode = 403;
-                        throw error;
-                    }
-
-                    args.where = {
-                        ...args.where,
-                        organizationId
-                    };
-                }
-
-                return query(args);
-            },
-
-            async updateMany({ model, args, query }) {
-                if (shouldEnforceOrganizationId(model)) {
-                    const organizationId = global.currentTenantId;
-                    
-                    if (!organizationId) {
-                        const error = new Error(`Tenant isolation violation: UPDATE_MANY on ${model} without organizationId`);
-                        error.statusCode = 403;
-                        throw error;
-                    }
-
-                    args.where = {
-                        ...args.where,
-                        organizationId
-                    };
-                }
-
-                return query(args);
-            },
-
-            async delete({ model, args, query }) {
-                if (shouldEnforceOrganizationId(model)) {
-                    const organizationId = global.currentTenantId;
-                    
-                    if (!organizationId) {
-                        const error = new Error(`Tenant isolation violation: DELETE on ${model} without organizationId`);
-                        error.statusCode = 403;
-                        throw error;
-                    }
-
-                    args.where = {
-                        ...args.where,
-                        organizationId
-                    };
-                }
-
-                return query(args);
-            },
-
-            async deleteMany({ model, args, query }) {
-                if (shouldEnforceOrganizationId(model)) {
-                    const organizationId = global.currentTenantId;
-                    
-                    if (!organizationId) {
-                        const error = new Error(`Tenant isolation violation: DELETE_MANY on ${model} without organizationId`);
-                        error.statusCode = 403;
-                        throw error;
-                    }
-
-                    args.where = {
-                        ...args.where,
-                        organizationId
-                    };
-                }
-
-                return query(args);
-            }
-        }
-    }
+prisma.$on('query', (e) => {
+  const threshold = parseInt(process.env.SLOW_QUERY_THRESHOLD_MS || '1000', 10);
+  if (e.duration > threshold) {
+    logger.warn({
+      type: 'slow_query',
+      query: e.query,
+      duration: e.duration,
+      params: e.params
+    }, `Slow query detected: ${e.duration}ms`);
+  }
 });
 
-export function setTenantContext(organizationId) {
-    global.currentTenantId = organizationId;
-}
+prisma.$on('error', (e) => {
+  logger.error({ err: e }, 'Prisma error');
+});
 
-export function clearTenantContext() {
-    global.currentTenantId = null;
-}
-
-export function getTenantContext() {
-    return global.currentTenantId;
-}
+export { prisma };
+export default prisma;
