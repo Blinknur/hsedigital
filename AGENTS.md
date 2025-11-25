@@ -74,7 +74,7 @@ npm run docker:ps          # List containers
 - **Authentication:** JWT
 - **Containerization:** Docker + Docker Compose
 - **Security:** Helmet, express-rate-limit, CORS
-- **Monitoring:** Pino (logging), Prometheus (metrics), Sentry (errors + performance), Grafana (dashboards)
+- **Monitoring:** Pino (logging), Prometheus (metrics), Sentry (errors + performance), OpenTelemetry (tracing), Grafana (dashboards)
 
 ## Architecture
 - **Structure:** Multi-tenant SaaS with organization-based isolation
@@ -88,6 +88,7 @@ npm run docker:ps          # List containers
 - **app:** Node.js backend + frontend (port 3001)
 - **postgres:** PostgreSQL database (port 5432)
 - **redis:** Redis cache (port 6379)
+- **jaeger:** Distributed tracing UI (port 16686)
 - **pgadmin:** Database management UI (port 5050)
 - **prometheus:** Metrics collection (port 9090) - optional
 - **grafana:** Monitoring dashboards (port 3000) - optional

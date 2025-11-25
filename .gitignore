@@ -96,3 +96,5 @@ k8s/overlays/*/secrets.yaml
 *.dump
 backups/
 /var/backups/
+*.bak
+*.bak2

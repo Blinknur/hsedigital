@@ -1,4 +1,24 @@
 services:
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: hse-jaeger
+    ports:
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+      - "14250:14250"
+      - "14268:14268"
+      - "14269:14269"
+      - "9411:9411"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - hse_network
+    restart: unless-stopped
+
   # --- Application (Node.js Backend + Frontend) ---
   app:
     build: 
@@ -25,11 +45,21 @@ services:
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASS=${SMTP_PASS}
       - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      - OTEL_ENABLED=${OTEL_ENABLED:-true}
+      - OTEL_SERVICE_NAME=hse-digital-backend
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318/v1/traces
+      - TRACE_SAMPLE_RATE_ENTERPRISE=${TRACE_SAMPLE_RATE_ENTERPRISE:-1.0}
+      - TRACE_SAMPLE_RATE_PROFESSIONAL=${TRACE_SAMPLE_RATE_PROFESSIONAL:-0.5}
+      - TRACE_SAMPLE_RATE_STARTER=${TRACE_SAMPLE_RATE_STARTER:-0.1}
+      - TRACE_SAMPLE_RATE_FREE=${TRACE_SAMPLE_RATE_FREE:-0.01}
+      - TRACE_SAMPLE_RATE_DEFAULT=${TRACE_SAMPLE_RATE_DEFAULT:-0.1}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      jaeger:
+        condition: service_started
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
       interval: 30s

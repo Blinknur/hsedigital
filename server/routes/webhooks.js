@@ -5,7 +5,7 @@ import {
     handleSubscriptionUpdated,
     handleSubscriptionDeleted,
     handlePaymentFailed
-} from '../services/stripeService.js';
+} from '../services/tracedStripeService.js';
 
 const router = express.Router();
 

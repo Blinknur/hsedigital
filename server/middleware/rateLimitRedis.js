@@ -1,6 +1,6 @@
-import Redis from 'ioredis';
+import { createTracedRedis } from './tracedRedis.js';
 
-const redis = new Redis({
+const redis = createTracedRedis({
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379'),
     password: process.env.REDIS_PASSWORD || undefined,
@@ -11,14 +11,6 @@ const redis = new Redis({
         }
         return Math.min(times * 50, 2000);
     }
-});
-
-redis.on('error', (err) => {
-    console.error('Redis connection error:', err);
-});
-
-redis.on('connect', () => {
-    console.log('✓ Redis connected for rate limiting');
 });
 
 const tokenBucketRateLimit = (options = {}) => {

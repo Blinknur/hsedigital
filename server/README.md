@@ -1,3 +1,70 @@
+# HSE.Digital Backend
+
+## Distributed Tracing with OpenTelemetry
+
+This backend includes comprehensive distributed tracing using OpenTelemetry that tracks:
+
+- **HTTP Requests**: Full request lifecycle with user/tenant context
+- **Database Queries**: All Prisma operations with performance metrics
+- **Redis Operations**: Cache hits, rate limiting, and session management
+- **External API Calls**: Stripe payments, email delivery, AI service requests
+- **Custom Business Logic**: With manual span creation
+
+### Features
+
+- **Tenant-Aware Sampling**: Different sample rates by subscription tier
+- **Path-Based Sampling**: Higher rates for critical paths (webhooks, billing, AI)
+- **Automatic Instrumentation**: HTTP, Express, Redis, and database operations
+- **Manual Instrumentation**: Custom spans for business logic and external APIs
+- **Trace Context Propagation**: Trace IDs in response headers and logs
+
+### Configuration
+
+Add to your `.env`:
+
+```env
+OTEL_ENABLED=true
+OTEL_SERVICE_NAME=hse-digital-backend
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318/v1/traces
+
+# Sampling rates by tenant tier
+TRACE_SAMPLE_RATE_ENTERPRISE=1.0
+TRACE_SAMPLE_RATE_PROFESSIONAL=0.5
+TRACE_SAMPLE_RATE_STARTER=0.1
+TRACE_SAMPLE_RATE_FREE=0.01
+TRACE_SAMPLE_RATE_DEFAULT=0.1
+```
+
+### Viewing Traces
+
+With Docker Compose:
+1. Start services: `docker-compose up -d`
+2. Access Jaeger UI: http://localhost:16686
+3. Select "hse-digital-backend" service
+4. View traces with full request context
+
+### Trace Attributes
+
+Each trace includes:
+- `tenant.id`, `tenant.tier`, `tenant.subscription_status`
+- `user.id`, `user.email`, `user.role`
+- `http.method`, `http.route`, `http.status_code`
+- `db.system`, `db.operation`, `db.model`, `db.duration_ms`
+- Custom attributes for AI, email, and payment operations
+
+### Using Traces in Code
+
+```javascript
+import { withSpan, addSpanAttributes, addSpanEvent } from './utils/tracing.js';
+
+// Wrap async operations
+await withSpan('custom.operation', { 'custom.attr': 'value' }, async (span) => {
+  // Your code here
+  addSpanEvent('important_event', { detail: 'info' });
+  return result;
+});
+```
+
 # HSE.Digital Backend - Tenant Isolation
 
 ## Overview

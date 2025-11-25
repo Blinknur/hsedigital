@@ -1,5 +1,5 @@
 import express from 'express';
-import { createCheckoutSession, createPortalSession } from '../services/stripeService.js';
+import { createCheckoutSession, createPortalSession } from '../services/tracedStripeService.js';
 
 const router = express.Router();
 

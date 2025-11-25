@@ -46,11 +46,17 @@ import { initSentry, sentryRequestHandler, sentryTracingHandler, sentryErrorHand
 import { httpLogger } from './middleware/logging.js';
 import { metricsMiddleware } from './middleware/metrics.js';
 import { sentryContextMiddleware, sentryPerformanceMiddleware } from './middleware/sentry.js';
+import { tracingMiddleware, enrichTracingContext, addTenantTierToSpan } from './middleware/tracing.js';
 import { createInstrumentedPrismaClient } from './utils/prisma-instrumented.js';
+import { createTracedPrismaClient } from './utils/tracedPrismaClient.js';
 import { alertManager } from './monitoring/alerts.js';
 import backupRoutes from './routes/backup.js';
+import { generateAIContent } from './services/tracedAiService.js';
 
 dotenv.config();
+
+import { initializeTracing } from './utils/tracing.js';
+initializeTracing();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -81,13 +87,16 @@ app.use(httpLogger);
 
 app.use(metricsMiddleware);
 
+app.use(tracingMiddleware);
+
 app.use(cookieParser());
 
 app.use(cors({
     origin: process.env.CORS_ORIGIN || '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-tenant-id', 'x-csrf-token', 'x-session-id'],
-    credentials: true
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-tenant-id', 'x-csrf-token', 'x-session-id', 'x-trace-id', 'x-span-id', 'traceparent', 'tracestate'],
+    credentials: true,
+    exposedHeaders: ['x-trace-id', 'x-span-id']
 }));
 
 app.use('/api/webhooks', webhookRoutes);
@@ -105,9 +114,12 @@ app.use(auditLogger());
 app.use(sentryContextMiddleware);
 app.use(sentryPerformanceMiddleware);
 
+app.use(enrichTracingContext);
+
 app.use('/uploads', express.static(uploadDir));
 
-const prisma = createInstrumentedPrismaClient();
+const prismaBase = createInstrumentedPrismaClient();
+const prisma = createTracedPrismaClient();
 
 logger.info('Initialized instrumented Prisma client');
 
@@ -182,6 +194,8 @@ const tenantContext = async (req, res, next) => {
     next();
 };
 
+const tenantContextWithTracing = [tenantContext, addTenantTierToSpan(prisma)];
+
 // --- Helper: Async Error Wrapper ---
 const asyncHandler = (fn) => (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);
@@ -233,7 +247,7 @@ app.get('/api/rbac/roles/me', authenticateToken, userRateLimit, asyncHandler(asy
 }));
 
 // --- USAGE ENDPOINT ---
-app.get('/api/usage/current', authenticateToken, tenantContext, asyncHandler(async (req, res) => {
+app.get('/api/usage/current', authenticateToken, ...tenantContextWithTracing, asyncHandler(async (req, res) => {
     const stats = await getUsageStats(req.tenantId);
     if (!stats) {
         return res.status(404).json({ error: 'Organization not found' });
@@ -245,7 +259,7 @@ app.get('/api/usage/current', authenticateToken, tenantContext, asyncHandler(asy
 app.use('/api/billing', authenticateToken, billingRoutes);
 
 // --- STATIONS ---
-app.get('/api/stations', authenticateToken, tenantContext, tenantRateLimit, requirePermission('stations', 'read'), asyncHandler(async (req, res) => {
+app.get('/api/stations', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('stations', 'read'), asyncHandler(async (req, res) => {
     const where = {};
     if (req.tenantId) where.organizationId = req.tenantId;
     if (req.query.region) where.region = req.query.region;
@@ -253,7 +267,7 @@ app.get('/api/stations', authenticateToken, tenantContext, tenantRateLimit, requ
     res.json(stations);
 }));
 
-app.post('/api/stations', authenticateToken, tenantContext, tenantRateLimit, requirePermission('stations', 'write'), validateRequest(stationSchema), requireQuota('stations'), asyncHandler(async (req, res) => {
+app.post('/api/stations', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('stations', 'write'), validateRequest(stationSchema), requireQuota('stations'), asyncHandler(async (req, res) => {
     const station = await prisma.station.create({
         data: {
             ...req.validatedData,
@@ -263,7 +277,7 @@ app.post('/api/stations', authenticateToken, tenantContext, tenantRateLimit, req
     res.status(201).json(station);
 }));
 
-app.put('/api/stations/:id', authenticateToken, tenantContext, tenantRateLimit, requirePermission('stations', 'write'), validateParams(idParamSchema), validateRequest(stationSchema.partial()), asyncHandler(async (req, res) => {
+app.put('/api/stations/:id', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('stations', 'write'), validateParams(idParamSchema), validateRequest(stationSchema.partial()), asyncHandler(async (req, res) => {
     const { id } = req.params;
     await prisma.station.updateMany({
         where: { id, organizationId: req.tenantId },
@@ -273,7 +287,7 @@ app.put('/api/stations/:id', authenticateToken, tenantContext, tenantRateLimit, 
     res.json(updated);
 }));
 
-app.delete('/api/stations/:id', authenticateToken, tenantContext, tenantRateLimit, requirePermission('stations', 'delete'), validateParams(idParamSchema), asyncHandler(async (req, res) => {
+app.delete('/api/stations/:id', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('stations', 'delete'), validateParams(idParamSchema), asyncHandler(async (req, res) => {
     const { id } = req.params;
     await prisma.station.deleteMany({
         where: { id, organizationId: req.tenantId }
@@ -282,7 +296,7 @@ app.delete('/api/stations/:id', authenticateToken, tenantContext, tenantRateLimi
 }));
 
 // --- AUDITS ---
-app.get('/api/audits', authenticateToken, tenantContext, tenantRateLimit, requirePermission('audits', 'read'), asyncHandler(async (req, res) => {
+app.get('/api/audits', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('audits', 'read'), asyncHandler(async (req, res) => {
     const where = { organizationId: req.tenantId };
     if (req.query.stationId) where.stationId = req.query.stationId;
     const audits = await prisma.audit.findMany({
@@ -292,7 +306,7 @@ app.get('/api/audits', authenticateToken, tenantContext, tenantRateLimit, requir
     res.json(audits);
 }));
 
-app.post('/api/audits', authenticateToken, tenantContext, tenantRateLimit, requirePermission('audits', 'write'), validateRequest(auditSchema), auditLog('audit'), requireQuota('audits'), trackUsage('audits'), asyncHandler(async (req, res) => {
+app.post('/api/audits', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('audits', 'write'), validateRequest(auditSchema), auditLog('audit'), requireQuota('audits'), trackUsage('audits'), asyncHandler(async (req, res) => {
     const audit = await prisma.audit.create({
         data: {
             organizationId: req.tenantId,
@@ -305,7 +319,7 @@ app.post('/api/audits', authenticateToken, tenantContext, tenantRateLimit, requi
     res.status(201).json(audit);
 }));
 
-app.put('/api/audits/:id', authenticateToken, tenantContext, tenantRateLimit, requirePermission('audits', 'write'), validateParams(idParamSchema), validateRequest(auditSchema.partial()), captureOriginalEntity('audit'), auditLog('audit'), asyncHandler(async (req, res) => {
+app.put('/api/audits/:id', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('audits', 'write'), validateParams(idParamSchema), validateRequest(auditSchema.partial()), captureOriginalEntity('audit'), auditLog('audit'), asyncHandler(async (req, res) => {
     const { id } = req.params;
     const updateData = { ...req.validatedData };
     if (updateData.scheduledDate) updateData.scheduledDate = new Date(updateData.scheduledDate);
@@ -315,7 +329,7 @@ app.put('/api/audits/:id', authenticateToken, tenantContext, tenantRateLimit, re
     res.json(updated);
 }));
 
-app.delete('/api/audits/:id', authenticateToken, tenantContext, tenantRateLimit, requirePermission('audits', 'delete'), validateParams(idParamSchema), asyncHandler(async (req, res) => {
+app.delete('/api/audits/:id', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('audits', 'delete'), validateParams(idParamSchema), asyncHandler(async (req, res) => {
     const { id } = req.params;
     await prisma.audit.deleteMany({
         where: { id, organizationId: req.tenantId }
@@ -324,7 +338,7 @@ app.delete('/api/audits/:id', authenticateToken, tenantContext, tenantRateLimit,
 }));
 
 // --- INCIDENTS ---
-app.get('/api/incidents', authenticateToken, tenantContext, tenantRateLimit, requirePermission('incidents', 'read'), asyncHandler(async (req, res) => {
+app.get('/api/incidents', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('incidents', 'read'), asyncHandler(async (req, res) => {
     const where = { organizationId: req.tenantId };
     if (req.query.stationId) where.stationId = req.query.stationId;
     const incidents = await prisma.incident.findMany({
@@ -334,7 +348,7 @@ app.get('/api/incidents', authenticateToken, tenantContext, tenantRateLimit, req
     res.json(incidents);
 }));
 
-app.post('/api/incidents', authenticateToken, tenantContext, tenantRateLimit, requirePermission('incidents', 'write'), validateRequest(incidentSchema), requireQuota('incidents'), trackUsage('incidents'), asyncHandler(async (req, res) => {
+app.post('/api/incidents', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('incidents', 'write'), validateRequest(incidentSchema), requireQuota('incidents'), trackUsage('incidents'), asyncHandler(async (req, res) => {
     const incident = await prisma.incident.create({
         data: {
             organizationId: req.tenantId,
@@ -345,7 +359,7 @@ app.post('/api/incidents', authenticateToken, tenantContext, tenantRateLimit, re
     res.status(201).json(incident);
 }));
 
-app.put('/api/incidents/:id', authenticateToken, tenantContext, tenantRateLimit, requirePermission('incidents', 'write'), validateParams(idParamSchema), validateRequest(incidentSchema.partial()), asyncHandler(async (req, res) => {
+app.put('/api/incidents/:id', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('incidents', 'write'), validateParams(idParamSchema), validateRequest(incidentSchema.partial()), asyncHandler(async (req, res) => {
     const { id } = req.params;
     await prisma.incident.updateMany({
         where: { id, organizationId: req.tenantId },
@@ -356,7 +370,7 @@ app.put('/api/incidents/:id', authenticateToken, tenantContext, tenantRateLimit,
 }));
 
 // --- WORK PERMITS ---
-app.get('/api/work-permits', authenticateToken, tenantContext, tenantRateLimit, requirePermission('workPermits', 'read'), asyncHandler(async (req, res) => {
+app.get('/api/work-permits', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('workPermits', 'read'), asyncHandler(async (req, res) => {
     const where = { organizationId: req.tenantId };
     if (req.query.stationId) where.stationId = req.query.stationId;
     const permits = await prisma.workPermit.findMany({
@@ -366,7 +380,7 @@ app.get('/api/work-permits', authenticateToken, tenantContext, tenantRateLimit, 
     res.json(permits);
 }));
 
-app.post('/api/work-permits', authenticateToken, tenantContext, tenantRateLimit, requirePermission('workPermits', 'write'), validateRequest(workPermitSchema), requireQuota('work_permits'), trackUsage('work_permits'), asyncHandler(async (req, res) => {
+app.post('/api/work-permits', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('workPermits', 'write'), validateRequest(workPermitSchema), requireQuota('work_permits'), trackUsage('work_permits'), asyncHandler(async (req, res) => {
     const permit = await prisma.workPermit.create({
         data: {
             organizationId: req.tenantId,
@@ -379,7 +393,7 @@ app.post('/api/work-permits', authenticateToken, tenantContext, tenantRateLimit,
     res.status(201).json(permit);
 }));
 
-app.put('/api/work-permits/:id', authenticateToken, tenantContext, tenantRateLimit, requirePermission('workPermits', 'write'), validateParams(idParamSchema), validateRequest(workPermitSchema.partial()), asyncHandler(async (req, res) => {
+app.put('/api/work-permits/:id', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('workPermits', 'write'), validateParams(idParamSchema), validateRequest(workPermitSchema.partial()), asyncHandler(async (req, res) => {
     const { id } = req.params;
     const updateData = { ...req.validatedData };
     if (updateData.validFrom) updateData.validFrom = new Date(updateData.validFrom);
@@ -393,7 +407,7 @@ app.put('/api/work-permits/:id', authenticateToken, tenantContext, tenantRateLim
 }));
 
 // --- CONTRACTORS ---
-app.get('/api/contractors', authenticateToken, tenantContext, tenantRateLimit, requirePermission('contractors', 'read'), asyncHandler(async (req, res) => {
+app.get('/api/contractors', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('contractors', 'read'), asyncHandler(async (req, res) => {
     const contractors = await prisma.contractor.findMany({
         where: { organizationId: req.tenantId },
         orderBy: { name: 'asc' }
@@ -401,7 +415,7 @@ app.get('/api/contractors', authenticateToken, tenantContext, tenantRateLimit, r
     res.json(contractors);
 }));
 
-app.post('/api/contractors', authenticateToken, tenantContext, tenantRateLimit, requirePermission('contractors', 'write'), validateRequest(contractorSchema), requireQuota('contractors'), asyncHandler(async (req, res) => {
+app.post('/api/contractors', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('contractors', 'write'), validateRequest(contractorSchema), requireQuota('contractors'), asyncHandler(async (req, res) => {
     const contractor = await prisma.contractor.create({
         data: {
             organizationId: req.tenantId,
@@ -412,7 +426,7 @@ app.post('/api/contractors', authenticateToken, tenantContext, tenantRateLimit, 
 }));
 
 // --- USERS ---
-app.get('/api/users', authenticateToken, tenantContext, tenantRateLimit, requirePermission('users', 'read'), asyncHandler(async (req, res) => {
+app.get('/api/users', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('users', 'read'), asyncHandler(async (req, res) => {
     const where = { organizationId: req.tenantId };
     const users = await prisma.user.findMany({ 
         where,
@@ -421,7 +435,7 @@ app.get('/api/users', authenticateToken, tenantContext, tenantRateLimit, require
     res.json(users);
 }));
 
-app.post('/api/users', authenticateToken, tenantContext, tenantRateLimit, requirePermission('users', 'write'), requireQuota('users'), asyncHandler(async (req, res) => {
+app.post('/api/users', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('users', 'write'), requireQuota('users'), asyncHandler(async (req, res) => {
     const { email, name, password, role, region } = req.body;
     const user = await prisma.user.create({
         data: {
@@ -438,7 +452,7 @@ app.post('/api/users', authenticateToken, tenantContext, tenantRateLimit, requir
     res.status(201).json(userInfo);
 }));
 
-app.post('/api/contractors', authenticateToken, tenantContext, tenantRateLimit, requirePermission('contractors', 'write'), validateRequest(contractorSchema), requireQuota('contractors'), asyncHandler(async (req, res) => {
+app.post('/api/contractors', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('contractors', 'write'), validateRequest(contractorSchema), requireQuota('contractors'), asyncHandler(async (req, res) => {
     const contractor = await prisma.contractor.create({
         data: {
             organizationId: req.tenantId,
@@ -449,17 +463,14 @@ app.post('/api/contractors', authenticateToken, tenantContext, tenantRateLimit, 
 }));
 
 // --- AI ---
-app.post('/api/ai/generate', authenticateToken, tenantContext, userRateLimit, validateRequest(aiPromptSchema), requireFeature('ai_assistant'), asyncHandler(async (req, res) => {
+app.post('/api/ai/generate', authenticateToken, ...tenantContextWithTracing, userRateLimit, validateRequest(aiPromptSchema), requireFeature('ai_assistant'), asyncHandler(async (req, res) => {
     const { prompt } = req.validatedData;
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-        });
-        res.json({ text: response.text });
-    } catch (aiError) {
-        console.error("AI Service Error:", aiError);
-        res.status(502).json({ error: "AI Service unavailable" });
+        const result = await generateAIContent(prompt, { model: 'gemini-2.5-flash' });
+        res.json(result);
+    } catch (error) {
+        console.error("AI Service Error:", error);
+        res.status(502).json({ error: error.message || "AI Service unavailable" });
     }
 }));
 
