@@ -68,9 +68,14 @@ logs/
 .cache/
 .npm/
 .pnpm-store/
+*.cache
 
 # Temporary files
 *.tmp
 *.temp
 .temp/
 tmp/
+
+# Testing
+test-results/
+coverage/

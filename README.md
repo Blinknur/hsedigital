@@ -303,6 +303,7 @@ We are currently transitioning from **Build** to **Launch Readiness**.
 
 ### 🔄 8. Security, Compliance & Trust Layer
 - [x] **Security Headers**: Helmet & Rate Limiting configured.
+- [x] **Row-Level Security**: PostgreSQL RLS policies for database-level tenant isolation.
 - [ ] **Database**: Provision managed PostgreSQL (AWS RDS).
 - [ ] **Backups**: Configure automated daily backups.
 
@@ -319,6 +320,8 @@ We are currently transitioning from **Build** to **Launch Readiness**.
 *   **[Architecture Blueprint](docs/architecture.md)**: Technical foundation.
 *   **[API Specification](docs/openapi.yaml)**: REST API endpoints.
 *   **[Database Schema](docs/schema.sql)**: SQL structure.
+*   **[RLS Architecture](docs/RLS_ARCHITECTURE.md)**: Row-Level Security implementation.
+*   **[Tenant Architecture](server/TENANT_ARCHITECTURE.md)**: Multi-tenancy design.
 
 ---
 

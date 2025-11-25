@@ -18,7 +18,9 @@
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:tenant": "node tests/tenant-isolation.unit.test.js",
     "test:tenant:integration": "node tests/tenant-isolation.test.js",
-    "test:migrations": "node prisma/test-migrations.js"
+    "test:migrations": "node prisma/test-migrations.js",
+    "rls:apply": "../prisma/migrations/apply_rls.sh",
+    "rls:test": "node test-rls-implementation.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
