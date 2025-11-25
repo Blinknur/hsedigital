@@ -21,6 +21,8 @@
     "test:tenant": "node tests/tenant-isolation.unit.test.js",
     "test:tenant:integration": "node tests/tenant-isolation.test.js",
     "test:migrations": "node prisma/test-migrations.js",
+    "test:e2e": "node tests/e2e-integration.test.js",
+    "test:e2e:docker": "docker-compose exec app npm run test:e2e",
     "rls:apply": "../prisma/migrations/apply_rls.sh",
     "rls:test": "node test-rls-implementation.js"
   },
@@ -69,6 +71,7 @@
   "devDependencies": {
     "jest": "^29.7.0",
     "nodemon": "^3.0.3",
-    "prisma": "^5.10.0"
+    "prisma": "^5.10.0",
+    "supertest": "^6.3.3"
   }
 }

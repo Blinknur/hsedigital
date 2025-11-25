@@ -79,6 +79,9 @@ tmp/
 # Testing
 test-results/
 coverage/
+server/tests/test-image.jpg
+*.test.jpg
+*.test.png
 
 # Monitoring & Observability
 prometheus_data/

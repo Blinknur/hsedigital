@@ -1,0 +1,70 @@
+services:
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: hse_db_test
+    environment:
+      POSTGRES_USER: hse_test
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_DB: hse_test
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hse_test -d hse_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hse_test_network
+
+  redis-test:
+    image: redis:7-alpine
+    container_name: hse_cache_test
+    command: redis-server --save "" --appendonly no
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hse_test_network
+
+  app-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: hse_app_test
+    environment:
+      - NODE_ENV=test
+      - PORT=3001
+      - DATABASE_URL=postgresql://hse_test:test_password@postgres-test:5432/hse_test
+      - TEST_DATABASE_URL=postgresql://hse_test:test_password@postgres-test:5432/hse_test
+      - JWT_SECRET=test-secret-key
+      - REFRESH_SECRET=test-refresh-secret
+      - CLIENT_URL=http://localhost:3001
+      - REDIS_HOST=redis-test
+      - REDIS_PORT=6379
+      - API_BASE_URL=http://app-test:3001
+    ports:
+      - "3002:3001"
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 10s
+      timeout: 10s
+      start_period: 30s
+      retries: 5
+    networks:
+      - hse_test_network
+    command: sh -c "npx prisma db push --skip-generate && npm start"
+
+networks:
+  hse_test_network:
+    name: hse_test_network
+    driver: bridge

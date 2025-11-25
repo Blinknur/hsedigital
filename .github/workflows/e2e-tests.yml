@@ -1,0 +1,113 @@
+name: E2E Integration Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: hse_test
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: hse_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install server dependencies
+        run: cd server && npm ci
+
+      - name: Generate Prisma Client
+        run: cd server && npx prisma generate
+
+      - name: Push Prisma Schema
+        run: cd server && npx prisma db push --skip-generate
+        env:
+          DATABASE_URL: postgresql://hse_test:test_password@localhost:5432/hse_test
+
+      - name: Start application server
+        run: cd server && npm start &
+        env:
+          NODE_ENV: test
+          PORT: 3001
+          DATABASE_URL: postgresql://hse_test:test_password@localhost:5432/hse_test
+          JWT_SECRET: test-secret-key
+          REFRESH_SECRET: test-refresh-secret
+          CLIENT_URL: http://localhost:3001
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          API_BASE_URL: http://localhost:3001
+
+      - name: Wait for server to be ready
+        run: |
+          for i in {1..30}; do
+            if curl -s http://localhost:3001/api/health > /dev/null; then
+              echo "Server is ready"
+              exit 0
+            fi
+            echo "Waiting for server... (attempt $i/30)"
+            sleep 2
+          done
+          echo "Server failed to start"
+          exit 1
+
+      - name: Run E2E tests
+        run: cd server && npm run test:e2e
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://hse_test:test_password@localhost:5432/hse_test
+          TEST_DATABASE_URL: postgresql://hse_test:test_password@localhost:5432/hse_test
+          JWT_SECRET: test-secret-key
+          REFRESH_SECRET: test-refresh-secret
+          API_BASE_URL: http://localhost:3001
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: e2e-test-results
+          path: |
+            server/test-results/
+            server/*.log
+
+      - name: Display logs on failure
+        if: failure()
+        run: |
+          echo "=== Application Logs ==="
+          cat server/*.log 2>/dev/null || echo "No logs found"

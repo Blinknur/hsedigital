@@ -26,6 +26,8 @@
     "docker:clean": "docker-compose down -v",
     "docker:ps": "docker-compose ps",
     "docker:health": "docker-compose ps && curl -f http://localhost:3001/api/health || echo 'Services not running'",
+    "test:e2e": "./scripts/run-e2e-tests.sh",
+    "test:e2e:local": "TEST_ENV=local ./scripts/run-e2e-tests.sh",
     "backup": "./scripts/backup.sh",
     "backup:tenant": "./scripts/backup.sh --tenant",
     "restore": "./scripts/restore.sh",
