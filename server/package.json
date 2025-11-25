@@ -9,10 +9,16 @@
     "dev": "nodemon index.js",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
+    "prisma:migrate:custom": "node prisma/run-migrations.js up",
+    "prisma:rollback:custom": "node prisma/run-migrations.js down",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
     "seed": "node prisma/seed.js",
+    "seed:rbac": "node prisma/seed-comprehensive.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:tenant": "node tests/tenant-isolation.unit.test.js",
-    "test:tenant:integration": "node tests/tenant-isolation.test.js"
+    "test:tenant:integration": "node tests/tenant-isolation.test.js",
+    "test:migrations": "node prisma/test-migrations.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

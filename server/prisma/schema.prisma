@@ -69,37 +69,44 @@ model UserRole {
 // ==================== EXISTING MODELS ====================
 
 model Organization {
-  id               String   @id @default(cuid())
-  name             String
-  ownerId          String
-  subscriptionPlan String   @default("free")
-  ssoConfig        Json?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  name                 String
+  ownerId              String
+  subscriptionPlan     String   @default("free")
+  ssoConfig            Json?
+  stripeCustomerId     String?  @unique
+  stripeSubscriptionId String?  @unique
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  users         User[]
-  stations      Station[]
-  contractors   Contractor[]
-  audits        Audit[]
-  forms         FormDefinition[]
-  incidents     Incident[]
-  workPermits   WorkPermit[]
+  users       User[]
+  stations    Station[]
+  contractors Contractor[]
+  audits      Audit[]
+  forms       FormDefinition[]
+  incidents   Incident[]
+  workPermits WorkPermit[]
 
   @@map("organizations")
 }
 
 model User {
-  id                 String    @id @default(cuid())
-  email              String    @unique
-  name               String
-  password           String
-  role               String    // Admin, Compliance Manager, Station Manager, Contractor
-  organizationId     String?
-  region             String?
-  assignedStationIds String[]  @default([])
-  contractorId       String?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  id                       String    @id @default(cuid())
+  email                    String    @unique
+  name                     String
+  password                 String
+  role                     String
+  organizationId           String?
+  region                   String?
+  assignedStationIds       String[]  @default([])
+  contractorId             String?
+  emailVerificationToken   String?   @unique
+  isEmailVerified          Boolean   @default(false)
+  passwordResetToken       String?   @unique
+  passwordResetTokenExpiry DateTime?
+  refreshTokens            String[]  @default([])
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   organization Organization? @relation(fields: [organizationId], references: [id])
   audits       Audit[]
@@ -107,6 +114,7 @@ model User {
   workPermits  WorkPermit[]
   userRoles    UserRole[]
 
+  @@index([organizationId])
   @@map("users")
 }
 
@@ -129,6 +137,7 @@ model Station {
   incidents    Incident[]
   workPermits  WorkPermit[]
 
+  @@index([organizationId])
   @@map("stations")
 }
 
@@ -146,28 +155,32 @@ model Contractor {
 
   organization Organization @relation(fields: [organizationId], references: [id])
 
+  @@index([organizationId])
   @@map("contractors")
 }
 
 model Audit {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   stationId      String
   auditorId      String
-  auditNumber    String   @unique
+  auditNumber    String    @unique
   scheduledDate  DateTime
   completedDate  DateTime?
-  status         String   @default("Scheduled")
+  status         String    @default("Scheduled")
   formId         String
-  findings       Json     @default("[]")
-  overallScore   Float    @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  findings       Json      @default("[]")
+  overallScore   Float     @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id])
   station      Station      @relation(fields: [stationId], references: [id])
   auditor      User         @relation(fields: [auditorId], references: [id])
 
+  @@index([organizationId])
+  @@index([stationId])
+  @@index([auditorId])
   @@map("audits")
 }
 
@@ -182,27 +195,31 @@ model FormDefinition {
 
   organization Organization @relation(fields: [organizationId], references: [id])
 
+  @@index([organizationId])
   @@map("form_definitions")
 }
 
 model Incident {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   stationId      String
   reporterId     String
   incidentType   String
   severity       String
   description    String
-  status         String   @default("Open")
-  reportedAt     DateTime @default(now())
+  status         String    @default("Open")
+  reportedAt     DateTime  @default(now())
   resolvedAt     DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id])
   station      Station      @relation(fields: [stationId], references: [id])
   reporter     User         @relation(fields: [reporterId], references: [id])
 
+  @@index([organizationId])
+  @@index([stationId])
+  @@index([reporterId])
   @@map("incidents")
 }
 
@@ -224,5 +241,8 @@ model WorkPermit {
   station      Station      @relation(fields: [stationId], references: [id])
   requester    User         @relation(fields: [requestedBy], references: [id])
 
+  @@index([organizationId])
+  @@index([stationId])
+  @@index([requestedBy])
   @@map("work_permits")
 }

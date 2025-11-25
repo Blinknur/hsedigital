@@ -38,6 +38,7 @@ dist-ssr
 *.db-journal
 prisma.db
 prisma.db-journal
+*.sql.backup
 
 # Build outputs
 build/

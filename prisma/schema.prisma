@@ -66,13 +66,15 @@ model UserRole {
 // ==================== EXISTING MODELS ====================
 
 model Organization {
-  id               String   @id @default(cuid())
-  name             String
-  ownerId          String
-  subscriptionPlan String   @default("free")
-  ssoConfig        Json?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                     String   @id @default(cuid())
+  name                   String
+  ownerId                String
+  subscriptionPlan       String   @default("free")
+  ssoConfig              Json?
+  stripeCustomerId       String?  @unique
+  stripeSubscriptionId   String?  @unique
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
   users          User[]
   stations       Station[]
@@ -85,23 +87,29 @@ model Organization {
 }
 
 model User {
-  id                String   @id @default(cuid())
-  name              String
-  email             String   @unique
-  password          String
-  role              String   @default("Station Manager")
-  organizationId    String?
-  region            String?
-  assignedStationIds Json?
-  contractorId      String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                        String    @id @default(cuid())
+  name                      String
+  email                     String    @unique
+  password                  String
+  role                      String    @default("Station Manager")
+  organizationId            String?
+  region                    String?
+  assignedStationIds        Json?
+  contractorId              String?
+  emailVerificationToken    String?   @unique
+  isEmailVerified           Boolean   @default(false)
+  passwordResetToken        String?   @unique
+  passwordResetTokenExpiry  DateTime?
+  refreshTokens             String[]  @default([])
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
 
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   audits       Audit[]
   incidents    Incident[]
   userRoles    UserRole[]
 
+  @@index([organizationId])
   @@map("users")
 }
 
@@ -123,6 +131,7 @@ model Station {
   audits       Audit[]
   incidents    Incident[]
 
+  @@index([organizationId])
   @@map("stations")
 }
 
@@ -145,6 +154,9 @@ model Audit {
   station      Station      @relation(fields: [stationId], references: [id], onDelete: Cascade)
   auditor      User         @relation(fields: [auditorId], references: [id], onDelete: Cascade)
 
+  @@index([organizationId])
+  @@index([stationId])
+  @@index([auditorId])
   @@map("audits")
 }
 
@@ -166,6 +178,9 @@ model Incident {
   station      Station      @relation(fields: [stationId], references: [id], onDelete: Cascade)
   reporter     User         @relation(fields: [reporterId], references: [id], onDelete: Cascade)
 
+  @@index([organizationId])
+  @@index([stationId])
+  @@index([reporterId])
   @@map("incidents")
 }
 
@@ -183,6 +198,7 @@ model Contractor {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
+  @@index([organizationId])
   @@map("contractors")
 }
 
@@ -197,5 +213,6 @@ model FormDefinition {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
+  @@index([organizationId])
   @@map("form_definitions")
 }
