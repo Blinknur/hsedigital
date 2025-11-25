@@ -68,6 +68,7 @@ model UserRole {
 model Organization {
   id                     String   @id @default(cuid())
   name                   String
+  slug                   String   @unique
   ownerId                String
   subscriptionPlan       String   @default("free")
   ssoConfig              Json?
@@ -98,7 +99,9 @@ model User {
   contractorId              String?
   emailVerificationToken    String?   @unique
   isEmailVerified           Boolean   @default(false)
+  emailVerificationExpires  DateTime?
   passwordResetToken        String?   @unique
+  passwordResetExpires      DateTime?
   passwordResetTokenExpiry  DateTime?
   refreshTokens             String[]  @default([])
   createdAt                 DateTime  @default(now())

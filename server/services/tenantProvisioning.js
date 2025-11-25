@@ -1,34 +1,302 @@
 import { PrismaClient } from '@prisma/client';
+import { authService } from './authService.js';
+import { emailService } from './emailService.js';
 
 const prisma = new PrismaClient();
 
-/**
- * Tenant Provisioning Service
- * Handles creation, configuration, and management of tenant organizations
- */
+function generateSlug(name) {
+    return name
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s-]/g, '')
+        .replace(/[\s_-]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+}
+
+async function ensureUniqueSlug(baseSlug) {
+    let slug = baseSlug;
+    let counter = 1;
+    
+    while (true) {
+        const existing = await prisma.organization.findUnique({
+            where: { slug }
+        });
+        
+        if (!existing) {
+            return slug;
+        }
+        
+        slug = `${baseSlug}-${counter}`;
+        counter++;
+    }
+}
+
+async function getOrCreateOwnerRole() {
+    let ownerRole = await prisma.role.findUnique({
+        where: { name: 'Owner' }
+    });
+    
+    if (!ownerRole) {
+        ownerRole = await prisma.role.create({
+            data: {
+                name: 'Owner',
+                description: 'Organization owner with full permissions',
+                isSystem: true
+            }
+        });
+        
+        const allPermissions = await prisma.permission.findMany();
+        
+        for (const permission of allPermissions) {
+            await prisma.rolePermission.create({
+                data: {
+                    roleId: ownerRole.id,
+                    permissionId: permission.id
+                }
+            });
+        }
+    }
+    
+    return ownerRole;
+}
+
+async function createDefaultRoles(organizationId) {
+    const defaultRoles = [
+        {
+            name: 'Compliance Manager',
+            description: 'Manages compliance activities and audits',
+            permissions: [
+                { resource: 'organizations', action: 'read' },
+                { resource: 'stations', action: 'read' },
+                { resource: 'stations', action: 'write' },
+                { resource: 'audits', action: 'read' },
+                { resource: 'audits', action: 'write' },
+                { resource: 'incidents', action: 'read' },
+                { resource: 'incidents', action: 'write' },
+                { resource: 'contractors', action: 'read' },
+                { resource: 'contractors', action: 'write' },
+                { resource: 'users', action: 'read' }
+            ]
+        },
+        {
+            name: 'Station Manager',
+            description: 'Manages station operations',
+            permissions: [
+                { resource: 'stations', action: 'read' },
+                { resource: 'audits', action: 'read' },
+                { resource: 'incidents', action: 'read' },
+                { resource: 'incidents', action: 'write' }
+            ]
+        },
+        {
+            name: 'Contractor',
+            description: 'External contractor with limited access',
+            permissions: [
+                { resource: 'stations', action: 'read' },
+                { resource: 'audits', action: 'read' }
+            ]
+        }
+    ];
+    
+    for (const roleData of defaultRoles) {
+        const existingRole = await prisma.role.findUnique({
+            where: { name: roleData.name }
+        });
+        
+        if (!existingRole) {
+            const role = await prisma.role.create({
+                data: {
+                    name: roleData.name,
+                    description: roleData.description,
+                    isSystem: false
+                }
+            });
+            
+            for (const permData of roleData.permissions) {
+                const permission = await prisma.permission.findUnique({
+                    where: {
+                        resource_action: {
+                            resource: permData.resource,
+                            action: permData.action
+                        }
+                    }
+                });
+                
+                if (permission) {
+                    await prisma.rolePermission.create({
+                        data: {
+                            roleId: role.id,
+                            permissionId: permission.id
+                        }
+                    });
+                }
+            }
+        }
+    }
+}
+
+async function createDefaultFormTemplates(organizationId) {
+    const templates = [
+        {
+            name: 'Monthly HSE Inspection',
+            frequency: 'Monthly',
+            schema: {
+                sections: [
+                    {
+                        title: 'Safety Equipment',
+                        fields: [
+                            { name: 'fire_extinguishers', type: 'checkbox', label: 'Fire extinguishers accessible and serviced' },
+                            { name: 'first_aid_kit', type: 'checkbox', label: 'First aid kit stocked and accessible' },
+                            { name: 'emergency_exits', type: 'checkbox', label: 'Emergency exits clear and marked' }
+                        ]
+                    },
+                    {
+                        title: 'Environmental Compliance',
+                        fields: [
+                            { name: 'waste_disposal', type: 'checkbox', label: 'Waste disposal procedures followed' },
+                            { name: 'spill_kits', type: 'checkbox', label: 'Spill kits available and inspected' }
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            name: 'Quarterly Compliance Audit',
+            frequency: 'Quarterly',
+            schema: {
+                sections: [
+                    {
+                        title: 'Documentation Review',
+                        fields: [
+                            { name: 'permits_current', type: 'checkbox', label: 'All permits current and displayed' },
+                            { name: 'training_records', type: 'checkbox', label: 'Staff training records up to date' },
+                            { name: 'incident_reports', type: 'checkbox', label: 'Incident reports filed and reviewed' }
+                        ]
+                    }
+                ]
+            }
+        }
+    ];
+    
+    for (const template of templates) {
+        await prisma.formDefinition.create({
+            data: {
+                organizationId,
+                name: template.name,
+                frequency: template.frequency,
+                schema: template.schema
+            }
+        });
+    }
+}
+
+async function initializeDefaultSettings(organizationId) {
+    await createDefaultRoles(organizationId);
+    await createDefaultFormTemplates(organizationId);
+}
+
+export async function provisionOrganization({ organizationName, ownerName, ownerEmail, ownerPassword }) {
+    return await prisma.$transaction(async (tx) => {
+        const hashedPassword = await authService.hashPassword(ownerPassword);
+        const emailVerificationToken = authService.generateEmailVerificationToken();
+        const emailVerificationExpires = authService.getEmailVerificationExpiry();
+        
+        const baseSlug = generateSlug(organizationName);
+        const slug = await ensureUniqueSlug(baseSlug);
+        
+        const user = await tx.user.create({
+            data: {
+                name: ownerName,
+                email: ownerEmail,
+                password: hashedPassword,
+                role: 'Owner',
+                isEmailVerified: false,
+                emailVerificationToken,
+                emailVerificationExpires
+            }
+        });
+        
+        const organization = await tx.organization.create({
+            data: {
+                name: organizationName,
+                slug,
+                ownerId: user.id,
+                subscriptionPlan: 'free'
+            }
+        });
+        
+        await tx.user.update({
+            where: { id: user.id },
+            data: { organizationId: organization.id }
+        });
+        
+        let ownerRole = await tx.role.findUnique({
+            where: { name: 'Owner' }
+        });
+        
+        if (!ownerRole) {
+            ownerRole = await tx.role.create({
+                data: {
+                    name: 'Owner',
+                    description: 'Organization owner with full permissions',
+                    isSystem: true
+                }
+            });
+            
+            const allPermissions = await tx.permission.findMany();
+            
+            for (const permission of allPermissions) {
+                await tx.rolePermission.create({
+                    data: {
+                        roleId: ownerRole.id,
+                        permissionId: permission.id
+                    }
+                });
+            }
+        }
+        
+        await tx.userRole.create({
+            data: {
+                userId: user.id,
+                roleId: ownerRole.id
+            }
+        });
+        
+        const tokens = authService.generateTokens(user);
+        await authService.storeRefreshToken(tx, user.id, tokens.refreshToken);
+        
+        await emailService.sendVerificationEmail(ownerEmail, emailVerificationToken);
+        
+        await initializeDefaultSettings(organization.id);
+        
+        const { password: _, emailVerificationToken: __, refreshTokens: ___, ...userInfo } = user;
+        const { ownerId: ____, ...orgInfo } = organization;
+        
+        return {
+            organization: orgInfo,
+            user: userInfo,
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken
+        };
+    });
+}
+
 class TenantProvisioningService {
-    /**
-     * Create a new tenant organization with initial setup
-     * @param {Object} tenantData - Organization data
-     * @param {string} tenantData.name - Organization name
-     * @param {string} tenantData.ownerId - Owner user ID
-     * @param {string} tenantData.subscriptionPlan - Subscription plan (free, pro, enterprise)
-     * @param {Object} tenantData.ssoConfig - Optional SSO configuration
-     * @returns {Promise<Object>} Created organization
-     */
     async createTenant({ name, ownerId, subscriptionPlan = 'free', ssoConfig = null }) {
         try {
-            // Create organization
+            const baseSlug = generateSlug(name);
+            const slug = await ensureUniqueSlug(baseSlug);
+            
             const organization = await prisma.organization.create({
                 data: {
                     name,
+                    slug,
                     ownerId,
                     subscriptionPlan,
                     ssoConfig
                 }
             });
 
-            // Update owner user with organizationId
             await prisma.user.update({
                 where: { id: ownerId },
                 data: { organizationId: organization.id }
@@ -42,18 +310,8 @@ class TenantProvisioningService {
         }
     }
 
-    /**
-     * Provision a complete tenant with initial data
-     * @param {Object} config - Complete tenant configuration
-     * @param {Object} config.organization - Organization data
-     * @param {Object} config.owner - Owner user data
-     * @param {Array} config.users - Additional users to create
-     * @param {Array} config.stations - Initial stations
-     * @returns {Promise<Object>} Provisioned tenant data
-     */
     async provisionCompleteTenant({ organization, owner, users = [], stations = [] }) {
         try {
-            // 1. Create owner user first (if not exists)
             let ownerUser;
             const existingOwner = await prisma.user.findUnique({
                 where: { email: owner.email }
@@ -70,7 +328,6 @@ class TenantProvisioningService {
                 });
             }
 
-            // 2. Create organization
             const newOrg = await this.createTenant({
                 name: organization.name,
                 ownerId: ownerUser.id,
@@ -78,7 +335,6 @@ class TenantProvisioningService {
                 ssoConfig: organization.ssoConfig || null
             });
 
-            // 3. Create additional users
             const createdUsers = [];
             for (const userData of users) {
                 const user = await prisma.user.create({
@@ -90,7 +346,6 @@ class TenantProvisioningService {
                 createdUsers.push(user);
             }
 
-            // 4. Create stations
             const createdStations = [];
             for (const stationData of stations) {
                 const station = await prisma.station.create({
@@ -118,12 +373,6 @@ class TenantProvisioningService {
         }
     }
 
-    /**
-     * Update tenant subscription plan
-     * @param {string} organizationId - Organization ID
-     * @param {string} newPlan - New subscription plan
-     * @returns {Promise<Object>} Updated organization
-     */
     async updateSubscription(organizationId, newPlan) {
         try {
             const organization = await prisma.organization.update({
@@ -139,12 +388,6 @@ class TenantProvisioningService {
         }
     }
 
-    /**
-     * Configure SSO for tenant
-     * @param {string} organizationId - Organization ID
-     * @param {Object} ssoConfig - SSO configuration
-     * @returns {Promise<Object>} Updated organization
-     */
     async configureSso(organizationId, ssoConfig) {
         try {
             const organization = await prisma.organization.update({
@@ -160,20 +403,12 @@ class TenantProvisioningService {
         }
     }
 
-    /**
-     * Deactivate tenant (soft delete)
-     * @param {string} organizationId - Organization ID
-     * @returns {Promise<Object>} Deactivated organization
-     */
     async deactivateTenant(organizationId) {
         try {
-            // Deactivate all stations
             await prisma.station.updateMany({
                 where: { organizationId },
                 data: { isActive: false }
             });
-
-            // Could add more cleanup here (e.g., cancel subscriptions, archive data)
             
             const organization = await prisma.organization.findUnique({
                 where: { id: organizationId }
@@ -187,11 +422,6 @@ class TenantProvisioningService {
         }
     }
 
-    /**
-     * Get tenant statistics
-     * @param {string} organizationId - Organization ID
-     * @returns {Promise<Object>} Tenant statistics
-     */
     async getTenantStats(organizationId) {
         try {
             const [userCount, stationCount, auditCount, incidentCount] = await Promise.all([
@@ -213,11 +443,6 @@ class TenantProvisioningService {
         }
     }
 
-    /**
-     * List all tenants with optional filters
-     * @param {Object} filters - Filter options
-     * @returns {Promise<Array>} List of organizations
-     */
     async listTenants(filters = {}) {
         try {
             const where = {};

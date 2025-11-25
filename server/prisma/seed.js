@@ -9,9 +9,9 @@ const hashPassword = async (password) => {
 };
 
 const MOCK_ORGANIZATIONS = [
-    { id: 'org-1', name: 'Total Parco Pakistan', ownerId: 'user-cm-1', subscriptionPlan: 'enterprise', ssoConfig: JSON.stringify({ enabled: true, domain: 'totalparco.com' }) },
-    { id: 'org-2', name: 'Shell Pakistan Ltd', ownerId: 'user-cm-2', subscriptionPlan: 'pro' },
-    { id: 'org-3', name: 'PSO Franchise Group', ownerId: 'user-cm-3', subscriptionPlan: 'free' }
+    { id: 'org-1', name: 'Total Parco Pakistan', slug: 'total-parco-pakistan', ownerId: 'user-cm-1', subscriptionPlan: 'enterprise', ssoConfig: JSON.stringify({ enabled: true, domain: 'totalparco.com' }) },
+    { id: 'org-2', name: 'Shell Pakistan Ltd', slug: 'shell-pakistan-ltd', ownerId: 'user-cm-2', subscriptionPlan: 'pro' },
+    { id: 'org-3', name: 'PSO Franchise Group', slug: 'pso-franchise-group', ownerId: 'user-cm-3', subscriptionPlan: 'free' }
 ];
 
 const MOCK_USERS = [

@@ -1,7 +1,8 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
-import { authService, registerSchema, loginSchema, passwordResetRequestSchema, passwordResetSchema } from '../services/authService.js';
+import { authService, registerSchema, loginSchema, passwordResetRequestSchema, passwordResetSchema, signupWithOrgSchema } from '../services/authService.js';
 import { emailService } from '../services/emailService.js';
+import { provisionOrganization } from '../services/tenantProvisioning.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -311,6 +312,40 @@ router.post('/logout-all', asyncHandler(async (req, res) => {
     await authService.revokeAllRefreshTokens(prisma, decoded.id);
 
     res.json({ message: 'Logged out from all devices' });
+}));
+
+// SELF-SERVICE ORGANIZATION SIGNUP
+router.post('/signup-with-org', asyncHandler(async (req, res) => {
+    const validation = signupWithOrgSchema.safeParse(req.body);
+    
+    if (!validation.success) {
+        return res.status(400).json({ 
+            error: 'Validation failed', 
+            details: validation.error.errors 
+        });
+    }
+
+    const { name, email, password, organizationName } = validation.data;
+
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+        return res.status(409).json({ error: 'Email already registered' });
+    }
+
+    const result = await provisionOrganization({
+        organizationName,
+        ownerName: name,
+        ownerEmail: email,
+        ownerPassword: password
+    });
+
+    res.status(201).json({
+        message: 'Organization created successfully. Please check your email to verify your account.',
+        organization: result.organization,
+        user: result.user,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken
+    });
 }));
 
 export default router;

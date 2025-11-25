@@ -17,6 +17,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
 import { requirePermission, requireRole, getUserPermissions, getUserRoles } from './middleware/rbac.js';
+import authRoutes from './routes/auth.js';
 
 dotenv.config();
 
@@ -223,6 +224,9 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'online', db: 'connected', mode: process.env.NODE_ENV || 'development' });
 });
 
+// AUTH ROUTES
+app.use('/api/auth', authRoutes);
+
 // FILE UPLOAD
 app.post('/api/upload', authenticateToken, upload.single('file'), asyncHandler(async (req, res) => {
     if (!req.file) {
@@ -232,23 +236,6 @@ app.post('/api/upload', authenticateToken, upload.single('file'), asyncHandler(a
     const host = req.get('host');
     const fileUrl = `${protocol}://${host}/uploads/${req.file.filename}`;
     res.json({ url: fileUrl, filename: req.file.filename });
-}));
-
-// AUTH
-app.post('/api/auth/login', asyncHandler(async (req, res) => {
-    const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: "Email and password required" });
-
-    const user = await prisma.user.findUnique({
-        where: { email }
-    });
-
-    if (user && user.password === password) {
-        const tokens = generateTokens(user);
-        const { password: _, ...userInfo } = user;
-        return res.json({ ...tokens, user: userInfo });
-    }
-    return res.status(401).json({ error: "Invalid credentials" });
 }));
 
 // ADMIN SEED
