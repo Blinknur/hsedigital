@@ -1,4 +1,6 @@
 import { authService } from '../services/authService.js';
+import { tenantService } from '../services/tenantService.js';
+import { tenantLogger } from '../utils/tenantLogger.js';
 
 export const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
@@ -25,15 +27,26 @@ export const tenantContext = async (req, res, next) => {
         return res.status(401).json({ error: 'Authentication required.' });
     }
 
+    let tenantId = null;
+
     if (user.role === 'Admin' && !user.organizationId) {
-        req.tenantId = req.headers['x-tenant-id'] || null;
-        return next();
+        tenantId = req.headers['x-tenant-id'] || null;
+    } else {
+        tenantId = user.organizationId;
     }
     
-    if (!user.organizationId) {
+    if (!tenantId) {
+        tenantLogger.logTenantAccessDenied(user.id, user.email, 'No tenant context');
         return res.status(403).json({ error: 'Access Denied: No Organization Context' });
     }
-    
-    req.tenantId = user.organizationId;
+
+    const isValid = await tenantService.validateTenant(tenantId);
+    if (!isValid) {
+        tenantLogger.logTenantAccessDenied(user.id, user.email, `Invalid tenant: ${tenantId}`);
+        return res.status(403).json({ error: 'Invalid organization' });
+    }
+
+    tenantLogger.logTenantSwitch(user.id, user.email, tenantId, req.path);
+    req.tenantId = tenantId;
     next();
 };

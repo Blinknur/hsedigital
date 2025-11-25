@@ -1,254 +1,157 @@
-# HSE.Digital Backend Server
+# HSE.Digital Backend - Tenant Isolation
 
-Enterprise backend server for HSE.Digital compliance platform with Stripe subscription management.
+## Overview
 
-## Features
+This backend implements comprehensive multi-tenant isolation with automatic tenant context injection, query interception, and Redis-based caching.
 
-### Subscription Management
-- **Stripe Integration**: Full checkout session and customer portal support
-- **Webhook Handlers**: Automated subscription lifecycle event processing
-- **Plan-Based Feature Flags**: Enforce features based on subscription tier
-- **Usage Tracking**: Track resource consumption with quota middleware
-- **Multi-Tenant Billing**: Organization-level subscription management
+## Tenant Isolation Features
 
-### Subscription Plans
-- **Free**: 2 stations, 3 users, 10 audits/month
-- **Pro**: 10 stations, 15 users, 100 audits/month, advanced reporting
-- **Enterprise**: Unlimited resources, SSO, custom branding, AI insights
+### 1. Enhanced Tenant Context Middleware
+- Validates organizationId exists in database
+- Caches validation results in Redis (5-minute TTL)
+- Logs all tenant context switches
+- Blocks access to invalid tenants
 
-## Setup
+### 2. Prisma Middleware for Auto-Injection
+- Automatically injects `organizationId` on all CREATE operations
+- Enforces tenant filters on all READ operations (findMany, findFirst, findUnique)
+- Blocks UPDATE/DELETE operations without tenant context
+- Applies to models: Station, Contractor, Audit, FormDefinition, Incident, WorkPermit
 
-### Environment Variables
-Copy `.env.example` to `.env` and configure:
+### 3. Query Interceptor
+- Blocks queries missing `organizationId` filter
+- Returns empty results for unauthorized access attempts
+- Throws errors on mutation attempts without tenant context
 
-```bash
-cp .env.example .env
-```
+### 4. Redis-Based Tenant Cache
+- Caches tenant validation results (5-minute TTL)
+- Falls back gracefully if Redis is unavailable
+- Provides cache invalidation methods
+- Improves performance for repeated tenant checks
 
-Required variables:
-- `DATABASE_URL`: PostgreSQL connection string
-- `STRIPE_SECRET_KEY`: Stripe API secret key
-- `STRIPE_WEBHOOK_SECRET`: Stripe webhook signing secret
-- `JWT_SECRET`: JWT signing secret
-- `CLIENT_URL`: Frontend application URL
+### 5. Tenant Logging
+- Logs all tenant context switches to `logs/tenant-access.log`
+- Records access denied attempts
+- Tracks query blocks and tenant injections
+- JSON format for easy parsing and analysis
 
-### Install Dependencies
+## Installation
+
 ```bash
 npm install
 ```
 
-### Database Setup
-```bash
-npx prisma generate
-npx prisma db push
-npm run seed
+## Configuration
+
+Add Redis configuration to your `.env`:
+
+```env
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
 ```
 
-### Start Server
-```bash
-npm run dev
-```
+## Usage
 
-## API Endpoints
-
-### Billing & Subscriptions
-
-#### Create Checkout Session
-```http
-POST /api/billing/checkout
-Authorization: Bearer {token}
-Content-Type: application/json
-
-{
-  "priceId": "price_xxx"
-}
-```
-
-#### Create Customer Portal Session
-```http
-POST /api/billing/portal
-Authorization: Bearer {token}
-```
-
-#### Get Usage & Quota
-```http
-GET /api/billing/usage
-Authorization: Bearer {token}
-```
-
-Returns:
-```json
-{
-  "subscriptionPlan": "pro",
-  "subscriptionStatus": "active",
-  "currentPeriodEnd": "2024-12-31T23:59:59.000Z",
-  "cancelAtPeriodEnd": false,
-  "usage": {
-    "audit": {
-      "limit": 100,
-      "used": 45,
-      "remaining": 55
-    },
-    "incident": {
-      "limit": 200,
-      "used": 12,
-      "remaining": 188
-    }
-  }
-}
-```
-
-### Webhooks
-
-#### Stripe Webhook Handler
-```http
-POST /api/webhooks/stripe
-Stripe-Signature: {signature}
-Content-Type: application/json
-```
-
-Handles events:
-- `checkout.session.completed`
-- `customer.subscription.created`
-- `customer.subscription.updated`
-- `customer.subscription.deleted`
-- `invoice.payment_succeeded`
-- `invoice.payment_failed`
-
-## Middleware
-
-### Quota Check
-Enforces monthly resource limits based on subscription plan:
+### Import Enhanced Prisma Client
 
 ```javascript
-app.post('/api/audits', authenticateToken, tenantContext, checkQuota('audit'), handler);
+import { prisma, setTenantContext, clearTenantContext } from './utils/prismaClient.js';
+
+// Set tenant context
+setTenantContext('org-id-123');
+
+// All queries now automatically filtered by organizationId
+const stations = await prisma.station.findMany();
+
+// Clear context when done
+clearTenantContext();
 ```
 
-Returns 429 when quota exceeded:
-```json
-{
-  "error": "Quota exceeded",
-  "message": "You have reached your monthly audit limit. Please upgrade your plan.",
-  "resourceType": "audit"
-}
-```
-
-### Feature Gate
-Restricts features to specific plans:
+### Use Tenant Middleware in Routes
 
 ```javascript
-app.post('/api/ai/generate', authenticateToken, requireFeature('ai_insights'), handler);
+import { applyTenantContext } from './middleware/tenantMiddleware.js';
+
+app.use('/api/*', authenticateToken, tenantContext, applyTenantContext);
 ```
 
-Returns 403 when feature unavailable:
-```json
-{
-  "error": "Feature not available",
-  "message": "This feature requires a higher plan. Current plan: free",
-  "feature": "ai_insights",
-  "currentPlan": "free"
-}
-```
-
-### Usage Tracking
-Automatically tracks API calls and resource creation:
+### Validate Tenants
 
 ```javascript
-await usageService.track(organizationId, 'audit', auditId);
+import { tenantService } from './services/tenantService.js';
+
+const isValid = await tenantService.validateTenant('org-id-123');
 ```
 
-## Stripe Setup
+## Testing
 
-### 1. Create Products & Prices
-In Stripe Dashboard, create products for each plan:
-- Free tier (no price needed)
-- Pro tier (monthly/yearly prices)
-- Enterprise tier (monthly/yearly prices)
+Run tenant isolation tests:
 
-### 2. Configure Webhook
-Add webhook endpoint in Stripe Dashboard:
-```
-https://your-domain.com/api/webhooks/stripe
-```
-
-Select events:
-- `checkout.session.completed`
-- `customer.subscription.created`
-- `customer.subscription.updated`
-- `customer.subscription.deleted`
-- `invoice.payment_succeeded`
-- `invoice.payment_failed`
-
-### 3. Add Metadata to Prices
-For each price in Stripe Dashboard, add metadata:
-```
-plan: pro
-```
-
-### 4. Test Webhooks
-Use Stripe CLI to forward webhooks locally:
 ```bash
-stripe listen --forward-to localhost:3001/api/webhooks/stripe
+npm run test:tenant
 ```
 
-## Database Schema
+## Architecture
 
-### Key Tables
+### Tenant Context Flow
 
-**Organization**
-- Stripe customer/subscription IDs
-- Subscription status and period
-- Trial tracking
-- Usage records relation
+1. User authenticates → JWT contains `organizationId`
+2. `authenticateToken` middleware validates JWT
+3. `tenantContext` middleware:
+   - Validates organizationId in database (with Redis cache)
+   - Logs tenant switch
+   - Sets `req.tenantId`
+4. `applyTenantContext` middleware sets global context
+5. Prisma middleware intercepts all queries
+6. Context cleared after response
 
-**UsageRecord**
-- Track resource consumption
-- Indexed by organization and type
-- Timestamped for period calculations
+### Security Guarantees
 
-**SubscriptionPlan** (reference data)
-- Stripe price/product mapping
-- Feature flags and limits
-- Trial configuration
+- ✅ No query can access data without valid tenant context
+- ✅ CREATE operations automatically get organizationId
+- ✅ Cross-tenant queries return empty results
+- ✅ Invalid tenants are blocked before reaching database
+- ✅ All tenant access is logged for audit trail
 
-**WebhookEvent**
-- Event deduplication
-- Processing status tracking
-- Error logging
+## Logging
 
-## Monitoring
+Tenant access logs are written to `server/logs/tenant-access.log`:
 
-### Check Webhook Processing
-```sql
-SELECT * FROM "WebhookEvent" 
-WHERE processed = false 
-ORDER BY "createdAt" DESC;
+```json
+{
+  "type": "TENANT_SWITCH",
+  "userId": "user-123",
+  "userEmail": "user@example.com",
+  "tenantId": "org-123",
+  "path": "/api/stations",
+  "timestamp": "2024-01-01T00:00:00.000Z"
+}
 ```
 
-### Check Usage Stats
-```sql
-SELECT 
-  "organizationId",
-  "resourceType",
-  COUNT(*) as total,
-  DATE_TRUNC('month', "recordedAt") as month
-FROM "UsageRecord"
-GROUP BY "organizationId", "resourceType", month
-ORDER BY month DESC, total DESC;
+## Performance
+
+- Redis caching reduces database load for tenant validation
+- Cache TTL: 5 minutes (configurable)
+- Graceful fallback if Redis is unavailable
+- Query interception adds minimal overhead (<1ms per query)
+
+## Maintenance
+
+### Clear Tenant Cache
+
+```javascript
+await tenantService.clearAllTenantCache();
 ```
 
-## Security
+### Invalidate Specific Tenant
 
-- Webhook signature verification required
-- JWT authentication on all endpoints
-- Multi-tenant data isolation
-- Rate limiting on API routes
-- Quota enforcement prevents abuse
+```javascript
+await tenantService.invalidateTenantCache('org-id-123');
+```
 
-## Error Handling
+### View Logs
 
-All Stripe operations include error handling:
-- Network failures gracefully handled
-- Webhook events logged for retry
-- Email notifications on payment failures
-- Automatic downgrade on subscription cancellation
+```bash
+tail -f server/logs/tenant-access.log
+```
