@@ -53,8 +53,10 @@ import { tracingMiddleware, enrichTracingContext, addTenantTierToSpan } from './
 import { createInstrumentedPrismaClient } from './utils/prisma-instrumented.js';
 import { createTracedPrismaClient } from './utils/tracedPrismaClient.js';
 import { alertManager } from './monitoring/alerts.js';
+import { advancedAlertingService } from './services/alertingService.js';
 import backupRoutes from './routes/backup.js';
 import { generateAIContent } from './services/tracedAiService.js';
+import alertingRoutes from './routes/alerting.js';
 
 dotenv.config();
 
@@ -212,6 +214,9 @@ app.use('/', metricsRoutes);
 
 // BACKUP ROUTES
 app.use('/api/backup', authenticateToken, requireRole('Admin'), backupRoutes);
+
+// ALERTING ROUTES
+app.use('/api/alerting', authenticateToken, alertingRoutes);
 
 // FILE UPLOAD
 app.post('/api/upload', authenticateToken, userRateLimit, upload.single('file'), asyncHandler(async (req, res) => {
@@ -452,6 +457,10 @@ app.use((err, req, res, next) => {
 
     if (err.statusCode >= 500 || !err.statusCode) {
         alertManager.criticalError(err, errorContext);
+        
+        advancedAlertingService.trackErrorRate(err).catch(e => 
+            logger.error({ error: e }, 'Failed to track error rate')
+        );
     }
 
     const statusCode = err.statusCode || 500;
@@ -490,10 +499,12 @@ process.on('SIGINT', () => {
 process.on('unhandledRejection', (reason, promise) => {
     logger.error({ reason, promise }, 'Unhandled Promise Rejection');
     alertManager.criticalError(new Error('Unhandled Promise Rejection'), { reason });
+    advancedAlertingService.trackErrorRate(reason instanceof Error ? reason : new Error('Unhandled Promise Rejection')).catch(() => {});
 });
 
 process.on('uncaughtException', (error) => {
     logger.fatal({ error }, 'Uncaught Exception');
     alertManager.criticalError(error, { type: 'uncaughtException' });
+    advancedAlertingService.trackErrorRate(error).catch(() => {});
     process.exit(1);
 });

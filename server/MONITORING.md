@@ -4,6 +4,33 @@
 
 This platform includes comprehensive monitoring and observability features:
 
+### Advanced Alerting System
+
+The platform includes an advanced multi-channel alerting system for critical events. Key features:
+
+- **Multi-Channel Support**: Slack, PagerDuty, and email notifications
+- **Intelligent Deduplication**: Redis-based alert deduplication with 1-hour windows
+- **Escalation Policies**: Automatic escalation after 15 minutes for unresolved ERROR/CRITICAL alerts
+- **Monitoring Coverage**: Error rates, quota breaches, database pool exhaustion, Redis failures
+
+**Quick Configuration:**
+```bash
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+PAGERDUTY_INTEGRATION_KEY=your-integration-key
+ALERT_EMAIL_RECIPIENTS=admin@example.com,ops@example.com
+```
+
+**API Endpoints:**
+- `GET /api/alerting/stats` - View alert statistics
+- `POST /api/alerting/test` - Send test alerts
+- `POST /api/alerting/cancel-escalation` - Cancel alert escalations
+
+See the main [README.md](./README.md) for complete alerting system documentation.
+
+---
+
+This platform includes comprehensive monitoring and observability features:
+
 - **Structured Logging**: JSON logging with Pino
 - **Metrics**: Prometheus metrics export
 - **Error Tracking**: Sentry integration with advanced multi-tenant features

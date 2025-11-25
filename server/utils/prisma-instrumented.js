@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { logger, logDatabaseOperation } from './logger.js';
 import { databaseQueryDuration, databaseQueryTotal } from './metrics.js';
+import { advancedAlertingService } from '../services/alertingService.js';
 
 export const createInstrumentedPrismaClient = () => {
   const prisma = new PrismaClient({
@@ -65,6 +66,9 @@ export const createInstrumentedPrismaClient = () => {
       tenant_id: 'unknown',
       status: 'error'
     });
+    
+    const error = new Error(e.message);
+    advancedAlertingService.trackErrorRate(error).catch(() => {});
   });
 
   prisma.$on('warn', (e) => {

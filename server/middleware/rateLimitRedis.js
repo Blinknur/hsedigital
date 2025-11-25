@@ -1,16 +1,27 @@
-import { createTracedRedis } from './tracedRedis.js';
+import Redis from 'ioredis';
+import { advancedAlertingService } from '../services/alertingService.js';
 
-const redis = createTracedRedis({
+const redis = new Redis({
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379'),
     password: process.env.REDIS_PASSWORD || undefined,
     retryStrategy: (times) => {
         if (times > 3) {
             console.error('Redis connection failed after 3 retries');
+            advancedAlertingService.checkRedisFailure(new Error('Redis connection failed after 3 retries')).catch(() => {});
             return null;
         }
         return Math.min(times * 50, 2000);
     }
+});
+
+redis.on('error', (err) => {
+    console.error('Redis connection error:', err);
+    advancedAlertingService.checkRedisFailure(err).catch(() => {});
+});
+
+redis.on('connect', () => {
+    console.log('✓ Redis connected for rate limiting');
 });
 
 const tokenBucketRateLimit = (options = {}) => {

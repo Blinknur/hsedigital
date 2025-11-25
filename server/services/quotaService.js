@@ -18,6 +18,9 @@ const redis = new Redis({
 
 redis.on('error', (err) => {
     console.error('Redis connection error:', err);
+    import('./alertingService.js').then(({ advancedAlertingService }) => {
+        advancedAlertingService.checkRedisFailure(err).catch(() => {});
+    }).catch(() => {});
 });
 
 let quotaConfig = null;
@@ -117,6 +120,20 @@ export async function checkQuota(organizationId, resource, adminOverride = false
     
     if (resourceData.limit === -1) {
         return { allowed: true, reason: 'unlimited' };
+    }
+    
+    const percentage = (resourceData.current / resourceData.limit) * 100;
+    
+    if (percentage >= 80) {
+        import('./alertingService.js').then(({ advancedAlertingService }) => {
+            advancedAlertingService.checkQuotaBreach(
+                organizationId,
+                resource,
+                resourceData.current,
+                resourceData.limit,
+                percentage
+            ).catch(() => {});
+        }).catch(() => {});
     }
     
     if (resourceData.current >= resourceData.limit) {

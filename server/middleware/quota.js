@@ -1,4 +1,5 @@
 import { checkQuota, incrementUsage, checkFeatureAccess } from '../services/quotaService.js';
+import { advancedAlertingService } from '../services/alertingService.js';
 
 export const requireQuota = (resource) => {
     return async (req, res, next) => {
@@ -16,6 +17,16 @@ export const requireQuota = (resource) => {
             const quotaCheck = await checkQuota(organizationId, resource, adminOverride);
             
             if (!quotaCheck.allowed) {
+                const percentage = quotaCheck.limit > 0 ? (quotaCheck.current / quotaCheck.limit) * 100 : 100;
+                
+                advancedAlertingService.checkQuotaBreach(
+                    organizationId, 
+                    resource, 
+                    quotaCheck.current, 
+                    quotaCheck.limit, 
+                    percentage
+                ).catch(err => console.error('Alert failed:', err));
+                
                 return res.status(403).json({
                     error: 'Quota exceeded',
                     code: 'QUOTA_EXCEEDED',

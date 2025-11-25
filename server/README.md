@@ -1,224 +1,229 @@
-# HSE.Digital Backend
-
-## Distributed Tracing with OpenTelemetry
-
-This backend includes comprehensive distributed tracing using OpenTelemetry that tracks:
-
-- **HTTP Requests**: Full request lifecycle with user/tenant context
-- **Database Queries**: All Prisma operations with performance metrics
-- **Redis Operations**: Cache hits, rate limiting, and session management
-- **External API Calls**: Stripe payments, email delivery, AI service requests
-- **Custom Business Logic**: With manual span creation
-
-### Features
-
-- **Tenant-Aware Sampling**: Different sample rates by subscription tier
-- **Path-Based Sampling**: Higher rates for critical paths (webhooks, billing, AI)
-- **Automatic Instrumentation**: HTTP, Express, Redis, and database operations
-- **Manual Instrumentation**: Custom spans for business logic and external APIs
-- **Trace Context Propagation**: Trace IDs in response headers and logs
-
-### Configuration
-
-Add to your `.env`:
-
-```env
-OTEL_ENABLED=true
-OTEL_SERVICE_NAME=hse-digital-backend
-OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318/v1/traces
-
-# Sampling rates by tenant tier
-TRACE_SAMPLE_RATE_ENTERPRISE=1.0
-TRACE_SAMPLE_RATE_PROFESSIONAL=0.5
-TRACE_SAMPLE_RATE_STARTER=0.1
-TRACE_SAMPLE_RATE_FREE=0.01
-TRACE_SAMPLE_RATE_DEFAULT=0.1
-```
-
-### Viewing Traces
-
-With Docker Compose:
-1. Start services: `docker-compose up -d`
-2. Access Jaeger UI: http://localhost:16686
-3. Select "hse-digital-backend" service
-4. View traces with full request context
-
-### Trace Attributes
-
-Each trace includes:
-- `tenant.id`, `tenant.tier`, `tenant.subscription_status`
-- `user.id`, `user.email`, `user.role`
-- `http.method`, `http.route`, `http.status_code`
-- `db.system`, `db.operation`, `db.model`, `db.duration_ms`
-- Custom attributes for AI, email, and payment operations
-
-### Using Traces in Code
-
-```javascript
-import { withSpan, addSpanAttributes, addSpanEvent } from './utils/tracing.js';
-
-// Wrap async operations
-await withSpan('custom.operation', { 'custom.attr': 'value' }, async (span) => {
-  // Your code here
-  addSpanEvent('important_event', { detail: 'info' });
-  return result;
-});
-```
-
-# HSE.Digital Backend - Tenant Isolation
+# Advanced Alerting System
 
 ## Overview
 
-This backend implements comprehensive multi-tenant isolation with automatic tenant context injection, query interception, and Redis-based caching.
+The HSE Digital platform includes an advanced alerting system with multi-channel support for critical events. The system provides intelligent alert deduplication, escalation policies, and integrations with Slack, PagerDuty, and email.
 
-## Tenant Isolation Features
+## Features
 
-### 1. Enhanced Tenant Context Middleware
-- Validates organizationId exists in database
-- Caches validation results in Redis (5-minute TTL)
-- Logs all tenant context switches
-- Blocks access to invalid tenants
+### Multi-Channel Support
+- **Slack**: Rich formatted messages with severity-based colors and detailed metadata
+- **PagerDuty**: Critical alert routing with deduplication keys
+- **Email**: HTML-formatted alert emails with full context
 
-### 2. Prisma Middleware for Auto-Injection
-- Automatically injects `organizationId` on all CREATE operations
-- Enforces tenant filters on all READ operations (findMany, findFirst, findUnique)
-- Blocks UPDATE/DELETE operations without tenant context
-- Applies to models: Station, Contractor, Audit, FormDefinition, Incident, WorkPermit
+### Alert Types
 
-### 3. Query Interceptor
-- Blocks queries missing `organizationId` filter
-- Returns empty results for unauthorized access attempts
-- Throws errors on mutation attempts without tenant context
+#### 1. Error Rate Monitoring
+Tracks sustained high error rates across the platform:
+- **WARNING** (10+ errors in 1 minute) → Slack
+- **ERROR** (50+ errors in 5 minutes) → Slack + Email
+- **CRITICAL** (100+ errors in 5 minutes) → Slack + Email + PagerDuty
 
-### 4. Redis-Based Tenant Cache
-- Caches tenant validation results (5-minute TTL)
-- Falls back gracefully if Redis is unavailable
-- Provides cache invalidation methods
-- Improves performance for repeated tenant checks
+#### 2. Quota Breach Detection
+Monitors tenant-specific quota usage:
+- **WARNING** (80% of quota) → Slack + Email
+- **ERROR** (90% of quota) → Slack + Email
+- **CRITICAL** (100% of quota) → Slack + Email + PagerDuty
 
-### 5. Tenant Logging
-- Logs all tenant context switches to `logs/tenant-access.log`
-- Records access denied attempts
-- Tracks query blocks and tenant injections
-- JSON format for easy parsing and analysis
+#### 3. Database Connection Pool Exhaustion
+Tracks database connection pool capacity:
+- **WARNING** (70% capacity) → Slack
+- **ERROR** (85% capacity) → Slack + Email
+- **CRITICAL** (95% capacity) → Slack + Email + PagerDuty
 
-## Installation
+#### 4. Redis Cluster Failures
+Immediate alerts for Redis connection issues:
+- **CRITICAL** → Slack + Email + PagerDuty
 
-```bash
-npm install
-```
+### Intelligent Alert Deduplication
+
+The system uses Redis-based deduplication with the following features:
+- 1-hour deduplication window for identical alerts
+- Severity escalation: Higher severity alerts override existing deduplicated alerts
+- Per-alert-type and per-tenant isolation
+
+### Escalation Policies
+
+For ERROR and CRITICAL alerts:
+- Automatic escalation after 15 minutes if unresolved
+- Escalated alerts sent to all channels (Slack + Email + PagerDuty)
+- Manual escalation cancellation via API
 
 ## Configuration
 
-Add Redis configuration to your `.env`:
-
-```env
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=
-```
-
-## Usage
-
-### Import Enhanced Prisma Client
-
-```javascript
-import { prisma, setTenantContext, clearTenantContext } from './utils/prismaClient.js';
-
-// Set tenant context
-setTenantContext('org-id-123');
-
-// All queries now automatically filtered by organizationId
-const stations = await prisma.station.findMany();
-
-// Clear context when done
-clearTenantContext();
-```
-
-### Use Tenant Middleware in Routes
-
-```javascript
-import { applyTenantContext } from './middleware/tenantMiddleware.js';
-
-app.use('/api/*', authenticateToken, tenantContext, applyTenantContext);
-```
-
-### Validate Tenants
-
-```javascript
-import { tenantService } from './services/tenantService.js';
-
-const isValid = await tenantService.validateTenant('org-id-123');
-```
-
-## Testing
-
-Run tenant isolation tests:
+### Environment Variables
 
 ```bash
-npm run test:tenant
+# Slack Integration
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+
+# PagerDuty Integration  
+PAGERDUTY_INTEGRATION_KEY=your-integration-key
+
+# Email Alerts (comma-separated recipients)
+ALERT_EMAIL_RECIPIENTS=admin@example.com,ops@example.com
+
+# Database Pool Monitoring
+DATABASE_POOL_MAX=10
 ```
 
-## Architecture
+## API Endpoints
 
-### Tenant Context Flow
+### Get Alert Statistics
+```http
+GET /api/alerting/stats
+Authorization: Bearer <admin-token>
+```
 
-1. User authenticates → JWT contains `organizationId`
-2. `authenticateToken` middleware validates JWT
-3. `tenantContext` middleware:
-   - Validates organizationId in database (with Redis cache)
-   - Logs tenant switch
-   - Sets `req.tenantId`
-4. `applyTenantContext` middleware sets global context
-5. Prisma middleware intercepts all queries
-6. Context cleared after response
-
-### Security Guarantees
-
-- ✅ No query can access data without valid tenant context
-- ✅ CREATE operations automatically get organizationId
-- ✅ Cross-tenant queries return empty results
-- ✅ Invalid tenants are blocked before reaching database
-- ✅ All tenant access is logged for audit trail
-
-## Logging
-
-Tenant access logs are written to `server/logs/tenant-access.log`:
-
+Response:
 ```json
 {
-  "type": "TENANT_SWITCH",
-  "userId": "user-123",
-  "userEmail": "user@example.com",
-  "tenantId": "org-123",
-  "path": "/api/stations",
-  "timestamp": "2024-01-01T00:00:00.000Z"
+  "totalActiveAlerts": 5,
+  "byType": {
+    "error_rate": 2,
+    "quota_breach": 3
+  },
+  "bySeverity": {
+    "WARNING": 2,
+    "ERROR": 2,
+    "CRITICAL": 1
+  }
 }
 ```
 
-## Performance
+### Send Test Alert
+```http
+POST /api/alerting/test
+Authorization: Bearer <admin-token>
+Content-Type: application/json
 
-- Redis caching reduces database load for tenant validation
-- Cache TTL: 5 minutes (configurable)
-- Graceful fallback if Redis is unavailable
-- Query interception adds minimal overhead (<1ms per query)
+{
+  "type": "test",
+  "severity": "WARNING",
+  "title": "Test Alert",
+  "message": "This is a test",
+  "metadata": {
+    "test": true
+  }
+}
+```
 
-## Maintenance
+### Cancel Escalation
+```http
+POST /api/alerting/cancel-escalation
+Authorization: Bearer <admin-token>
+Content-Type: application/json
 
-### Clear Tenant Cache
+{
+  "alertKey": "error_rate:global:High Error Rate Detected"
+}
+```
+
+## Integration Points
+
+### Automatic Integration
+
+The alerting system is automatically integrated with:
+
+1. **Global Error Handler** - Tracks all 500-level errors
+2. **Quota Service** - Monitors quota breaches at 80%, 90%, and 100%
+3. **Prisma Client** - Tracks database errors and slow queries
+4. **Redis Client** - Detects connection failures
+5. **Unhandled Rejections** - Captures unhandled promise rejections
+
+### Manual Usage
 
 ```javascript
-await tenantService.clearAllTenantCache();
+import { advancedAlertingService } from './services/alertingService.js';
+
+// Track custom errors
+await advancedAlertingService.trackErrorRate(error);
+
+// Check quota breach
+await advancedAlertingService.checkQuotaBreach(
+    organizationId,
+    'stations',
+    current: 95,
+    limit: 100,
+    percentage: 95
+);
+
+// Check database pool
+await advancedAlertingService.checkDatabasePoolExhaustion(
+    activeConnections: 9,
+    maxConnections: 10
+);
+
+// Check Redis failure
+await advancedAlertingService.checkRedisFailure(error);
+
+// Send custom alert
+await advancedAlertingService.sendAlert({
+    type: 'custom',
+    severity: 'ERROR',
+    title: 'Custom Alert',
+    message: 'Something went wrong',
+    metadata: { key: 'value' },
+    channels: ['slack', 'email'],
+    tenantId: 'org-123'
+});
 ```
 
-### Invalidate Specific Tenant
+## Slack Message Format
 
-```javascript
-await tenantService.invalidateTenantCache('org-id-123');
-```
+Alerts sent to Slack include:
+- Severity emoji (ℹ️, ⚠️, 🔴, 🚨)
+- Alert title and message
+- Tenant ID (if applicable)
+- Detailed metadata fields
+- Environment and timestamp
+- Color-coded attachments
 
-### View Logs
+## PagerDuty Integration
 
-```bash
-tail -f server/logs/tenant-access.log
-```
+PagerDuty alerts include:
+- Unique deduplication key for alert grouping
+- Severity mapping (info, warning, error, critical)
+- Source identification (hse-digital)
+- Component identification (tenant ID or platform)
+- Custom details with full context
+
+## Monitoring and Observability
+
+All alert activity is logged via Pino with:
+- Structured logging for alert sends
+- Debug logs for deduplication
+- Error logs for failed alert deliveries
+- Performance tracking for alert processing
+
+## Best Practices
+
+1. **Test Integrations**: Use the test endpoint to verify Slack, PagerDuty, and email configurations
+2. **Monitor Alert Volume**: Check alert statistics regularly to identify noisy alerts
+3. **Tune Thresholds**: Adjust escalation policies based on your operational requirements
+4. **Cancel Escalations**: Use the cancel-escalation endpoint when issues are resolved
+5. **Review Deduplications**: Check logs to ensure deduplication is working as expected
+
+## Troubleshooting
+
+### Alerts Not Sending
+
+1. Check environment variables are set correctly
+2. Verify Slack webhook URL is valid
+3. Confirm PagerDuty integration key is active
+4. Check email service configuration (SMTP settings)
+5. Review application logs for alert sending errors
+
+### Too Many Alerts
+
+1. Review alert thresholds in `ESCALATION_POLICIES`
+2. Increase deduplication window (`MAX_DEDUP_TIME_MS`)
+3. Adjust error rate tracking window
+4. Consider suppressing low-severity alerts during known issues
+
+### Missing Alerts
+
+1. Verify Redis connectivity (alerts use Redis for deduplication)
+2. Check alert statistics to see if alerts are being deduplicated
+3. Review application error logs
+4. Ensure monitoring middleware is active
