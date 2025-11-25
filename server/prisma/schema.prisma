@@ -260,11 +260,15 @@ model AuditLog {
   status         Int
   errorMessage   String?
   metadata       Json     @default("{}")
+  entityType     String?
+  entityId       String?
+  changes        Json?
   createdAt      DateTime @default(now())
 
   @@index([userId])
   @@index([organizationId])
   @@index([action])
+  @@index([entityType])
   @@index([createdAt])
   @@map("audit_logs")
 }

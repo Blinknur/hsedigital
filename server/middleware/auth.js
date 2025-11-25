@@ -17,6 +17,8 @@ export const authenticateToken = (req, res, next) => {
     }
     
     req.user = user;
+    req.ipAddress = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
+    req.userAgent = req.headers['user-agent'];
     next();
 };
 

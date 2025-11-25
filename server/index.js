@@ -21,7 +21,7 @@ import { requirePermission, requireRole, getUserPermissions, getUserRoles } from
 import { securityHeaders, additionalSecurityHeaders } from './middleware/security.js';
 import { sanitizeRequest } from './middleware/sanitization.js';
 import { generateCSRFMiddleware } from './middleware/csrf.js';
-import { auditLogger } from './middleware/auditLog.js';
+import { auditLogger, auditLog, captureOriginalEntity } from './middleware/auditLog.js';
 import { tenantRateLimit, userRateLimit, ipRateLimit, authRateLimit } from './middleware/rateLimitRedis.js';
 import { 
     validateRequest, 
@@ -38,6 +38,8 @@ import {
     idParamSchema
 } from './middleware/validation.js';
 import authRoutes from './routes/auth.js';
+import auditLogsRouter from './routes/auditLogs.js';
+import { startAuditLogCleanupScheduler } from './services/auditLogCleanup.js';
 
 dotenv.config();
 
@@ -332,7 +334,7 @@ app.get('/api/audits', authenticateToken, tenantContext, tenantRateLimit, requir
     res.json(audits);
 }));
 
-app.post('/api/audits', authenticateToken, tenantContext, tenantRateLimit, requirePermission('audits', 'write'), validateRequest(auditSchema), asyncHandler(async (req, res) => {
+app.post('/api/audits', authenticateToken, tenantContext, tenantRateLimit, requirePermission('audits', 'write'), validateRequest(auditSchema), auditLog('audit'), asyncHandler(async (req, res) => {
     const audit = await prisma.audit.create({
         data: {
             organizationId: req.tenantId,
@@ -345,7 +347,7 @@ app.post('/api/audits', authenticateToken, tenantContext, tenantRateLimit, requi
     res.status(201).json(audit);
 }));
 
-app.put('/api/audits/:id', authenticateToken, tenantContext, tenantRateLimit, requirePermission('audits', 'write'), validateParams(idParamSchema), validateRequest(auditSchema.partial()), asyncHandler(async (req, res) => {
+app.put('/api/audits/:id', authenticateToken, tenantContext, tenantRateLimit, requirePermission('audits', 'write'), validateParams(idParamSchema), validateRequest(auditSchema.partial()), captureOriginalEntity('audit'), auditLog('audit'), asyncHandler(async (req, res) => {
     const { id } = req.params;
     const updateData = { ...req.validatedData };
     if (updateData.scheduledDate) updateData.scheduledDate = new Date(updateData.scheduledDate);
@@ -466,6 +468,9 @@ app.post('/api/ai/generate', authenticateToken, tenantContext, userRateLimit, va
     }
 }));
 
+// --- AUDIT LOGS ---
+app.use('/api/admin/audit-logs', auditLogsRouter);
+
 // --- Frontend Serving (Production) ---
 const frontendPath = path.join(__dirname, '../dist');
 if (fs.existsSync(frontendPath)) {
@@ -486,6 +491,7 @@ app.use((err, req, res, next) => {
 // --- Startup ---
 const server = app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
+    startAuditLogCleanupScheduler();
 });
 
 process.on('SIGTERM', () => {

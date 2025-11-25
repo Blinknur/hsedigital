@@ -137,3 +137,118 @@ export const logSecurityEvent = async (eventType, details) => {
     await logToFile(logEntry);
     console.log(`[SECURITY] ${eventType}:`, details);
 };
+
+// Additional audit middleware for entity-level tracking
+const GDPR_SENSITIVE_FIELDS = ['password', 'refreshTokens', 'emailVerificationToken', 'passwordResetToken'];
+
+const sanitizeChanges = (changes) => {
+  if (!changes) return null;
+  
+  const sanitized = { ...changes };
+  
+  if (sanitized.before) {
+    GDPR_SENSITIVE_FIELDS.forEach(field => {
+      if (sanitized.before[field]) {
+        sanitized.before[field] = '[REDACTED]';
+      }
+    });
+  }
+  
+  if (sanitized.after) {
+    GDPR_SENSITIVE_FIELDS.forEach(field => {
+      if (sanitized.after[field]) {
+        sanitized.after[field] = '[REDACTED]';
+      }
+    });
+  }
+  
+  return sanitized;
+};
+
+export const auditLog = (entityType) => {
+  return async (req, res, next) => {
+    const originalJson = res.json.bind(res);
+    
+    res.json = async function(data) {
+      try {
+        if (!req.user || !req.tenantId) {
+          return originalJson(data);
+        }
+
+        let action = 'READ';
+        let entityId = null;
+        let changes = null;
+
+        if (req.method === 'POST') {
+          action = 'CREATE';
+          entityId = data?.id || null;
+          changes = { after: data };
+        } else if (req.method === 'PUT' || req.method === 'PATCH') {
+          action = 'UPDATE';
+          entityId = req.params.id || data?.id || null;
+          
+          if (req.originalEntity) {
+            changes = {
+              before: req.originalEntity,
+              after: data
+            };
+          } else {
+            changes = { after: data };
+          }
+        } else if (req.method === 'DELETE') {
+          action = 'DELETE';
+          entityId = req.params.id || null;
+          changes = req.originalEntity ? { before: req.originalEntity } : null;
+        }
+
+        if (['CREATE', 'UPDATE', 'DELETE'].includes(action)) {
+          await prisma.auditLog.create({
+            data: {
+              organizationId: req.tenantId,
+              userId: req.user.id,
+              action,
+              resource: req.path,
+              resourceId: entityId,
+              ipAddress: req.ipAddress || req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress,
+              userAgent: req.userAgent || req.headers['user-agent'] || 'Unknown',
+              status: res.statusCode,
+              entityType,
+              entityId,
+              changes: sanitizeChanges(changes)
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Audit log error:', error);
+      }
+
+      return originalJson(data);
+    };
+
+    next();
+  };
+};
+
+export const captureOriginalEntity = (entityType, idParam = 'id') => {
+  return async (req, res, next) => {
+    if (req.method === 'PUT' || req.method === 'PATCH' || req.method === 'DELETE') {
+      try {
+        const entityId = req.params[idParam];
+        if (entityId && req.tenantId) {
+          const model = prisma[entityType];
+          if (model) {
+            req.originalEntity = await model.findFirst({
+              where: {
+                id: entityId,
+                organizationId: req.tenantId
+              }
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error capturing original entity:', error);
+      }
+    }
+    next();
+  };
+};

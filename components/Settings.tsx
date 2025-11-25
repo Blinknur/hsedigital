@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Station, User, UserRole, Vector, Organization, View, FormDefinition, ActivityLogEntry, Permission } from '../types';
+import { Station, User, UserRole, Vector, Organization, View, FormDefinition, Permission } from '../types';
 import Card from './shared/Card';
 import StationsSettings from './settings/StationsSettings';
 import UsersSettings from './settings/UsersSettings';
@@ -20,7 +20,6 @@ interface SettingsProps {
     formDefinitions: FormDefinition[];
     currentUser: User;
     organization: Organization;
-    activityLogs: ActivityLogEntry[];
     onUpdateStation: (station: Station) => void;
     onAddStation: (station: Omit<Station, 'id' | 'location' | 'organizationId'>) => void;
     onDeleteStation: (id: string) => void;
@@ -113,7 +112,7 @@ const Settings: React.FC<SettingsProps> = (props) => {
                             onUpdateOrganization={props.onUpdateOrganization}
                         />;
             case 'activityLog':
-                return <ActivityLog logs={props.activityLogs} users={props.users} />;
+                return <ActivityLog users={props.users} />;
             case 'systemData':
                 return <SystemDataSettings />;
             default:

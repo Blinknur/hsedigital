@@ -102,6 +102,9 @@ const RBAC_PERMISSIONS = [
     // Analytics
     { id: 'perm-analytics-read', resource: 'analytics', action: 'read', description: 'View analytics dashboards' },
     { id: 'perm-analytics-advanced', resource: 'analytics', action: 'advanced', description: 'Access advanced analytics features' },
+    
+    // Audit Logs
+    { id: 'perm-audit-logs-read', resource: 'audit_logs', action: 'read', description: 'View system audit logs' },
 ];
 
 const RBAC_ROLE_PERMISSIONS = {
@@ -115,7 +118,8 @@ const RBAC_ROLE_PERMISSIONS = {
         'perm-form-read', 'perm-form-write', 'perm-form-delete', 'perm-form-submit',
         'perm-permit-read', 'perm-permit-write', 'perm-permit-delete', 'perm-permit-approve',
         'perm-report-read', 'perm-report-generate', 'perm-report-export',
-        'perm-analytics-read', 'perm-analytics-advanced'
+        'perm-analytics-read', 'perm-analytics-advanced',
+        'perm-audit-logs-read'
     ],
     'role-compliance-manager': [
         'perm-org-read',
@@ -127,7 +131,8 @@ const RBAC_ROLE_PERMISSIONS = {
         'perm-form-read', 'perm-form-write', 'perm-form-submit',
         'perm-permit-read', 'perm-permit-approve',
         'perm-report-read', 'perm-report-generate', 'perm-report-export',
-        'perm-analytics-read', 'perm-analytics-advanced'
+        'perm-analytics-read', 'perm-analytics-advanced',
+        'perm-audit-logs-read'
     ],
     'role-station-manager': [
         'perm-station-read',

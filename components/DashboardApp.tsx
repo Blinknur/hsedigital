@@ -86,7 +86,6 @@ const DashboardApp: React.FC<DashboardAppProps> = ({
     const { data: incidents = [], isLoading: isLoadingIncidents } = useQuery({ queryKey: ['incidents'], queryFn: api.fetchIncidents });
     const { data: audits = [], isLoading: isLoadingAudits } = useQuery({ queryKey: ['audits'], queryFn: api.fetchAudits });
     const { data: permits = [], isLoading: isLoadingPermits } = useQuery({ queryKey: ['permits'], queryFn: api.fetchPermits });
-    const { data: activityLogs = [], isLoading: isLoadingActivityLogs } = useQuery({ queryKey: ['activityLogs'], queryFn: api.fetchActivityLogs });
     const { data: contractors = [], isLoading: isLoadingContractors } = useQuery({ queryKey: ['contractors'], queryFn: api.fetchContractors });
     const { data: vectors = [] } = useQuery({ queryKey: ['vectors'], queryFn: api.fetchVectors, initialData: [] });
     
@@ -94,10 +93,10 @@ const DashboardApp: React.FC<DashboardAppProps> = ({
 
     const canViewAnalytics = usePermissions(currentUser, Permission.ViewAnalytics);
     const canViewBIDashboard = usePermissions(currentUser, Permission.ViewBIDashboard);
-    const isLoadingData = isLoadingStations || isLoadingFormDefinitions || isLoadingSubmissions || isLoadingIncidents || isLoadingAudits || isLoadingPermits || isLoadingActivityLogs || isLoadingContractors;
+    const isLoadingData = isLoadingStations || isLoadingFormDefinitions || isLoadingSubmissions || isLoadingIncidents || isLoadingAudits || isLoadingPermits || isLoadingContractors;
 
     const currentOrgData = useMemo(() => {
-        if (!viewingOrganizationId) return { stations: [], audits: [], submissions: [], incidents: [], formDefinitions: [], users: [], permits: [], organization: null, activityLogs: [], contractors: [] };
+        if (!viewingOrganizationId) return { stations: [], audits: [], submissions: [], incidents: [], formDefinitions: [], users: [], permits: [], organization: null, contractors: [] };
         const orgId = viewingOrganizationId;
         
         const orgPermits = permits.filter(p => p.organizationId === orgId);
@@ -116,7 +115,6 @@ const DashboardApp: React.FC<DashboardAppProps> = ({
             users: users.filter(u => u.organizationId === orgId),
             permits: visiblePermits,
             organization: organizations.find(o => o.id === orgId),
-            activityLogs: activityLogs.filter(log => log.organizationId === orgId),
             contractors: orgContractors,
         };
     }, [viewingOrganizationId, stations, audits, submissions, incidents, formDefinitions, users, organizations, permits, activityLogs, contractors, currentUser]);
@@ -377,7 +375,7 @@ const DashboardApp: React.FC<DashboardAppProps> = ({
                 if (!canViewAnalytics) return <GmDashboard {...dashboardProps} />;
                 if (isFreePlan) return <UpgradePrompt featureName="Analytics Studio" setCurrentView={setCurrentView} />;
                 return <ReportGenerator audits={currentOrgData.audits} submissions={currentOrgData.submissions} incidents={currentOrgData.incidents} stations={currentOrgData.stations} users={users} formDefinitions={currentOrgData.formDefinitions} currentUser={currentUser} />;
-            case 'settings': return <Settings currentUser={currentUser} onUpdateVectorStore={handleUpdateVectorStore} stations={currentOrgData.stations} onAddStation={handleAddStation} onUpdateStation={handleUpdateStation} onDeleteStation={handleDeleteStation} users={currentOrgData.users} onAddUser={handleAddUser} onUpdateUser={handleUpdateUser} onDeleteUser={handleDeleteUser} formDefinitions={currentOrgData.formDefinitions} onAddFormDefinition={handleAddForm} onUpdateFormDefinition={handleUpdateForm} onDeleteFormDefinition={handleDeleteForm} organization={currentOrgData.organization!} onUpdateOrganization={handleUpdateOrganization} setCurrentView={setCurrentView} activityLogs={currentOrgData.activityLogs} />;
+            case 'settings': return <Settings currentUser={currentUser} onUpdateVectorStore={handleUpdateVectorStore} stations={currentOrgData.stations} onAddStation={handleAddStation} onUpdateStation={handleUpdateStation} onDeleteStation={handleDeleteStation} users={currentOrgData.users} onAddUser={handleAddUser} onUpdateUser={handleUpdateUser} onDeleteUser={handleDeleteUser} formDefinitions={currentOrgData.formDefinitions} onAddFormDefinition={handleAddForm} onUpdateFormDefinition={handleUpdateForm} onDeleteFormDefinition={handleDeleteForm} organization={currentOrgData.organization!} onUpdateOrganization={handleUpdateOrganization} setCurrentView={setCurrentView} />;
             case 'permit': return <PermitDashboard permits={currentOrgData.permits} stations={currentOrgData.stations} users={users} contractors={currentOrgData.contractors} currentUser={currentUser} onCreatePermit={handleCreatePermit} onUpdatePermitStatus={handleUpdatePermitStatus} isLoading={isLoadingPermits} />;
             case 'biDashboard':
                 if (!canViewBIDashboard) return <GmDashboard {...dashboardProps} />;
