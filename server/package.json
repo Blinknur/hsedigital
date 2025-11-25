@@ -23,6 +23,12 @@
     "test:migrations": "node prisma/test-migrations.js",
     "test:e2e": "node tests/e2e-integration.test.js",
     "test:e2e:docker": "docker-compose exec app npm run test:e2e",
+    "test:load": "node tests/load-testing/run-all-tests.js",
+    "test:load:smoke": "node tests/load-testing/scenarios/smoke-test.js",
+    "test:load:stress": "node tests/load-testing/scenarios/stress-test.js",
+    "test:load:concurrent": "node tests/load-testing/scenarios/concurrent-tenant-test.js",
+    "test:load:spike": "node tests/load-testing/scenarios/spike-test.js",
+    "test:load:endurance": "node tests/load-testing/scenarios/endurance-test.js",
     "rls:apply": "../prisma/migrations/apply_rls.sh",
     "rls:test": "node test-rls-implementation.js"
   },
@@ -69,6 +75,7 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "autocannon": "^7.15.0",
     "jest": "^29.7.0",
     "nodemon": "^3.0.3",
     "prisma": "^5.10.0",

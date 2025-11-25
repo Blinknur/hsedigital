@@ -1,103 +1,17 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# Environment variables
+node_modules/
+dist/
+build/
 .env
 .env.local
-.env.staging
-.env.production
-.env.*.local
-
-# Prisma
-**/node_modules/@prisma/client
-
-# Database
-*.db
-*.db-journal
-prisma.db
-prisma.db-journal
-*.sql.backup
-
-# Build outputs
-build/
-public/uploads/
-
-# Docker
-docker-compose.override.yml
-.dockerignore
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# IDE files
-.vscode/*
-!.vscode/extensions.json
-.idea/
-*.swp
-*.swo
-*~
-
-# Logs
 *.log
-logs/
+.DS_Store
+.vscode/
+.idea/
 
-# Cache directories
-.cache/
-.npm/
-.pnpm-store/
-*.cache
+# Load testing results
+server/tests/load-testing/results/*.json
+server/tests/load-testing/results/*.html
+server/tests/load-testing/results/*.md
 
-# Temporary files
-*.tmp
-*.temp
-.temp/
-tmp/
-
-# Testing
-test-results/
-coverage/
-server/tests/test-image.jpg
-*.test.jpg
-*.test.png
-
-# Monitoring & Observability
-prometheus_data/
-grafana_data/
-loki_data/
-
-# Kubernetes secrets (if generated locally)
-k8s/secrets/*.yaml
-!k8s/secrets/.gitkeep
-k8s/overlays/*/secrets.yaml
-
-# Backups
-*.sql.gz
-*.backup
-*.dump
-backups/
-/var/backups/
-*.bak
-*.bak2
+# Keep the results directory but ignore contents
+!server/tests/load-testing/results/.gitkeep
