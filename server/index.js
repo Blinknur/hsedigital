@@ -9,8 +9,6 @@ import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
-import Stripe from 'stripe';
-import nodemailer from 'nodemailer';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -42,6 +40,8 @@ import auditLogsRouter from './routes/auditLogs.js';
 import { startAuditLogCleanupScheduler } from './services/auditLogCleanup.js';
 import { requireQuota, trackUsage, requireFeature } from './middleware/quota.js';
 import { getUsageStats } from './services/quotaService.js';
+import billingRoutes from './routes/billing.js';
+import webhookRoutes from './routes/webhooks.js';
 
 dotenv.config();
 
@@ -82,6 +82,11 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization', 'x-tenant-id', 'x-csrf-token', 'x-session-id'],
     credentials: true
 }));
+
+// Webhooks need raw body for signature verification - MUST be before express.json()
+app.use('/api/webhooks', webhookRoutes);
+
+// Apply JSON parsing to all other routes
 app.use(express.json({ limit: '10mb' }));
 
 // 6. Request Sanitization
@@ -104,25 +109,6 @@ const prisma = new PrismaClient();
 
 // Initialize AI Client
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-// Initialize Stripe Client (Conditional)
-const stripe = process.env.STRIPE_SECRET_KEY 
-    ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' }) 
-    : null;
-
-if (!stripe) {
-    console.warn("⚠️ STRIPE_SECRET_KEY not found. Payments will be mocked.");
-}
-
-// Initialize Nodemailer
-const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.ethereal.email',
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    auth: {
-        user: process.env.SMTP_USER || 'ethereal.user',
-        pass: process.env.SMTP_PASS || 'ethereal.pass'
-    }
-});
 
 // File Storage Config (Multer)
 const storage = multer.diskStorage({
@@ -147,56 +133,7 @@ const upload = multer({
     }
 });
 
-// --- SERVICES (Implementation) ---
 
-// Email Service
-const emailService = {
-    sendMagicLink: async (email, token) => {
-        const link = `${process.env.CLIENT_URL || 'http://localhost:5173'}/#/verify?token=${token}`;
-        console.log(`[EMAIL] Magic Link for ${email}: ${link}`);
-        if (!process.env.SMTP_HOST) return true;
-        try {
-            await transporter.sendMail({
-                from: '"HSE.Digital Security" <security@hse.digital>',
-                to: email,
-                subject: 'Log in to HSE.Digital',
-                html: `<p>Click here to log in: <a href="${link}">Magic Link</a></p>`
-            });
-            return true;
-        } catch (e) {
-            console.error("Email send failed:", e);
-            return false;
-        }
-    },
-    sendAlert: async (email, subject, message) => {
-        console.log(`[EMAIL] Alert to ${email}: ${message}`);
-        if (!process.env.SMTP_HOST) return true;
-        try {
-            await transporter.sendMail({
-                from: '"HSE.Digital Alerts" <alerts@hse.digital>',
-                to: email,
-                subject: subject,
-                text: message,
-                html: `<p>${message}</p>`
-            });
-            return true;
-        } catch (e) {
-            console.error("Email alert failed:", e);
-            return false;
-        }
-    }
-};
-
-// Payment Service
-const paymentService = {
-    createPortalSession: async (customerId) => {
-        return { url: 'https://billing.stripe.com/p/session/test_123' };
-    },
-    createCheckoutSession: async (planId, orgId, userEmail) => {
-         console.log(`[STRIPE] Creating checkout session for ${planId}`);
-         return { url: `${process.env.CLIENT_URL || 'http://localhost:5173'}/#/settings?success=true&plan=${planId}` }; 
-    }
-};
 
 // --- Helper: Generate Tokens ---
 const generateTokens = (user) => {
@@ -296,6 +233,9 @@ app.get('/api/usage/current', authenticateToken, tenantContext, asyncHandler(asy
     }
     res.json(stats);
 }));
+
+// --- BILLING ---
+app.use('/api/billing', authenticateToken, billingRoutes);
 
 // --- STATIONS ---
 app.get('/api/stations', authenticateToken, tenantContext, tenantRateLimit, requirePermission('stations', 'read'), asyncHandler(async (req, res) => {
