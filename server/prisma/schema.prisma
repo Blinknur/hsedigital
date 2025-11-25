@@ -100,11 +100,12 @@ model User {
   region                   String?
   assignedStationIds       String[]  @default([])
   contractorId             String?
-  emailVerificationToken   String?   @unique
   isEmailVerified          Boolean   @default(false)
-  passwordResetToken       String?   @unique
-  passwordResetTokenExpiry DateTime?
-  refreshTokens            String[]  @default([])
+  emailVerificationToken   String?
+  emailVerificationExpires DateTime?
+  passwordResetToken       String?
+  passwordResetExpires     DateTime?
+  refreshTokens            String?
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
 
@@ -245,4 +246,25 @@ model WorkPermit {
   @@index([stationId])
   @@index([requestedBy])
   @@map("work_permits")
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  userId         String?
+  organizationId String?
+  action         String
+  resource       String
+  resourceId     String?
+  ipAddress      String
+  userAgent      String
+  status         Int
+  errorMessage   String?
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now())
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
