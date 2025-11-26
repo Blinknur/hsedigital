@@ -23,6 +23,7 @@
     "test:verbose": "node --experimental-vm-modules node_modules/jest/bin/jest.js --verbose",
     "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --testPathPattern='(auth|analytics|quota|security)\\.test\\.js'",
     "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --testPathPattern='(e2e-integration|tenant-isolation)\\.test\\.js'",
+    "test:regression": "node --experimental-vm-modules node_modules/jest/bin/jest.js src/tests/advanced-features-regression.test.js",
     "test:tenant": "node tests/tenant-isolation.unit.test.js",
     "test:tenant:integration": "node tests/tenant-isolation.test.js",
     "test:tenant:regression": "node src/tests/tenant-isolation-regression.test.js",

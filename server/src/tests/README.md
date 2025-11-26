@@ -1,349 +1,250 @@
-# End-to-End Integration Test Suite
+# HSE Digital Test Suite
 
-## Overview
+Comprehensive test coverage for the HSE Digital platform.
 
-This E2E test suite validates critical user journeys in the HSE.Digital platform running against a fully containerized environment with test data isolation.
+## Test Files
+
+### Regression Tests
+
+**`advanced-features-regression.test.js`** - Comprehensive regression tests for all advanced features
+- Stripe billing integration (checkout, webhooks, subscription lifecycle)
+- RBAC permission checking across all resources
+- Quota enforcement per subscription tier
+- Rate limiting validation
+- WebSocket notifications
+- Background job processing (email, reports, exports, webhooks, tenant onboarding)
+- Report generation with PDF and scheduling
+
+**Run:** `npm run test:regression`
+
+**Documentation:** [README_ADVANCED_REGRESSION.md](./README_ADVANCED_REGRESSION.md)
+
+### Feature-Specific Tests
+
+- **`stripe.test.js`** - Stripe integration tests (webhook handlers, subscription lifecycle)
+- **`stripe-unit.test.js`** - Unit tests for Stripe service functions
+- **`quota.test.js`** - Quota service tests (Jest format)
+- **`websocket-notifications.test.js`** - WebSocket real-time notification tests
+- **`queue.test.js`** - Background job queue tests
+- **`report-generation.test.js`** - PDF report generation end-to-end tests
+
+### Security & Access Control
+
+- **`security.test.js`** - Security hardening tests (CSRF, XSS, SQL injection, rate limiting)
+- **`auth.test.js`** - Authentication and authorization tests
+- **`token-hashing.test.js`** - Token security implementation tests
+- **`audit-log.test.js`** - Audit logging functionality tests
+
+### Data & Isolation
+
+- **`tenant-isolation.test.js`** - Multi-tenant data isolation tests (integration)
+- **`tenant-isolation.unit.test.js`** - Tenant isolation unit tests
+- **`tenantMigration.test.js`** - Tenant migration API tests
+
+### Performance & Monitoring
+
+- **`performance.test.js`** - Performance benchmarks
+- **`monitoring.test.js`** - Monitoring and alerting tests
+- **`tracing.test.js`** - OpenTelemetry tracing tests
+- **`analytics.test.js`** - Analytics service tests
+
+### Integration & E2E
+
+- **`e2e-integration.test.js`** - End-to-end integration tests
+- **`mobile-api.test.js`** - Mobile API endpoint tests
+
+### Load Testing
+
+**Directory:** `load-testing/`
+- Smoke, stress, spike, endurance, concurrent tenant tests
+
+## Quick Start
+
+### Run All Tests
+```bash
+npm test
+```
+
+### Run Specific Test Suites
+```bash
+npm run test:regression        # Advanced features regression
+npm run test:e2e              # End-to-end integration
+npm run test:tenant           # Tenant isolation (unit)
+npm run test:tenant:integration # Tenant isolation (integration)
+npm run test:load             # All load tests
+```
+
+### Run Individual Test Files
+```bash
+npm test -- src/tests/stripe.test.js
+npm test -- src/tests/quota.test.js
+npm test -- src/tests/security.test.js
+```
+
+### Run Tests with Pattern Matching
+```bash
+npm test -- --testNamePattern="Stripe"
+npm test -- --testNamePattern="RBAC"
+npm test -- --testNamePattern="WebSocket"
+```
+
+## Test Environment Setup
+
+### Prerequisites
+
+1. **PostgreSQL** database running
+2. **Redis** running
+3. **Environment variables** configured (see .env.example)
+
+### Required Environment Variables
+
+```bash
+# Auth
+JWT_SECRET=your-secret-key
+REFRESH_SECRET=your-refresh-secret
+
+# Database
+DATABASE_URL=postgresql://user:pass@localhost:5432/hse_digital
+
+# Redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+
+# Stripe (optional)
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+```
+
+### Database Setup
+
+```bash
+# Run migrations
+npm run prisma:migrate
+
+# Seed RBAC permissions
+npm run seed:rbac
+
+# Seed test data
+npm run seed
+```
+
+## Docker Testing
+
+### Run tests in Docker
+```bash
+# Start services
+docker-compose -f docker/docker-compose.yml up -d
+
+# Run tests
+docker-compose -f docker/docker-compose.yml exec app npm test
+
+# Run specific suite
+docker-compose -f docker/docker-compose.yml exec app npm run test:regression
+```
 
 ## Test Coverage
 
-### Critical User Journeys
-
-1. **User Signup with Organization**
-   - Creates new organization with subdomain
-   - Registers admin user
-   - Validates organization provisioning
-
-2. **User Authentication**
-   - Email verification bypass for testing
-   - JWT token generation and validation
-   - Session management
-
-3. **Stripe Integration**
-   - Checkout session creation
-   - Webhook simulation (checkout.session.completed)
-   - Subscription activation
-   - Plan upgrade flow
-
-4. **Station Management**
-   - Station creation with multi-tenant isolation
-   - Organization-scoped data access
-
-5. **Audit Creation with File Uploads**
-   - Audit record creation
-   - File upload simulation
-   - Findings attachment
-   - Score calculation
-
-6. **Audit Updates**
-   - Status transitions
-   - Findings addition
-   - Photo attachments
-   - Overall score updates
-
-7. **Incident Reporting**
-   - Incident creation
-   - Severity classification
-   - Reporter assignment
-
-8. **Incident Notifications**
-   - Email alert generation
-   - Notification delivery (mocked in test env)
-   - Alert content validation
-
-9. **Tenant Isolation**
-   - Cross-tenant data access prevention
-   - Organization-scoped queries
-   - Data leakage prevention
-
-10. **Data Cleanup**
-    - Automatic test data removal
-    - Database state reset
-    - No test pollution
-
-## Running Tests
-
-### Local Development Environment
-
-```bash
-# Run against local running instance
-cd server
-npm run test:e2e
-```
-
-### Docker Environment (Recommended)
-
-```bash
-# Start test environment
-docker-compose -f docker-compose.test.yml up -d
-
-# Wait for services to be healthy
-docker-compose -f docker-compose.test.yml ps
-
-# Run E2E tests
-docker-compose -f docker-compose.test.yml exec app-test npm run test:e2e
-
-# View logs
-docker-compose -f docker-compose.test.yml logs -f app-test
-
-# Cleanup
-docker-compose -f docker-compose.test.yml down -v
-```
-
-### Production-like Environment
-
-```bash
-# Run against main docker-compose
-npm run docker:up
-npm run docker:logs:app
-
-# In another terminal
-docker-compose exec app npm run test:e2e
-
-# Cleanup
-npm run docker:down
-```
-
-## Test Configuration
-
-### Environment Variables
-
-- `API_BASE_URL`: Base URL for API requests (default: `http://localhost:3001`)
-- `TEST_DATABASE_URL`: Database connection for test data (default: uses `DATABASE_URL`)
-- `JWT_SECRET`: Secret for JWT token generation
-- `STRIPE_SECRET_KEY`: Stripe API key (optional, tests handle missing config)
-- `SMTP_HOST`: Email server (optional, notifications are mocked if not configured)
-
-### Test Isolation
-
-Each test run:
-- Creates unique organization with timestamp-based subdomain
-- Generates unique email addresses
-- Uses isolated database transactions where possible
-- Cleans up all created data automatically
-
-### Data Isolation Strategy
-
-```javascript
-// Unique identifiers prevent collisions
-const subdomain = `test-org-${Date.now()}`;
-const email = `test-${Date.now()}@example.com`;
-
-// Cleanup ensures no test pollution
-await cleanupTestData();
-```
-
-## Test Output
-
-### Success Output
-```
-╔═══════════════════════════════════════════════╗
-║   E2E Integration Test Suite                 ║
-║   Critical User Journeys                     ║
-╚═══════════════════════════════════════════════╝
-
-✓ Service is ready
-
-=== Test 1: Signup with Organization ===
-✅ Signup successful
-  - Organization ID: clx...
-  - User ID: clx...
-
-=== Test 2: User Login ===
-✅ Login successful
-
-=== Test 3: Stripe Checkout Session Creation ===
-✅ Stripe checkout session created
-
-...
-
-==================================================
-✅ ALL E2E TESTS PASSED
-==================================================
-```
-
-### Failure Output
-```
-❌ Test suite error: Connection timeout
-
-==================================================
-❌ 3 TEST(S) FAILED:
-  - Signup failed
-  - Login failed
-  - Stripe checkout failed
-==================================================
-```
-
-## Test Architecture
-
-### Request Helper
-```javascript
-const makeRequest = (method, path, data, token) => {
-    // HTTP client for API calls
-    // Handles authentication
-    // Parses JSON responses
-};
-```
-
-### Service Health Check
-```javascript
-const waitForService = async (maxAttempts = 30) => {
-    // Polls /api/health endpoint
-    // Waits up to 60 seconds
-    // Throws if service doesn't start
-};
-```
-
-### Test Context
-```javascript
-let testContext = {
-    organizationId: null,
-    userId: null,
-    accessToken: null,
-    stationId: null,
-    auditId: null,
-    incidentId: null
-};
-```
-
-## Extending Tests
-
-### Adding New Test Cases
-
-```javascript
-const testNewFeature = async () => {
-    console.log('\n=== Test N: New Feature ===');
-    
-    // Test implementation
-    const result = await makeRequest('POST', '/api/new-endpoint', {
-        // test data
-    }, testContext.accessToken);
-    
-    if (result.status === 200) {
-        console.log('✅ New feature test passed');
-        return true;
-    } else {
-        console.error('❌ New feature test failed');
-        return false;
-    }
-};
-
-// Add to test suite
-async function runE2ETests() {
-    // ...
-    if (!await testNewFeature()) errors.push('New feature failed');
-    // ...
-}
-```
-
-### Test Helpers
-
-Use `test-helpers.js` for common operations:
-
-```javascript
-import { 
-    generateTestEmail, 
-    createTestOrganization,
-    retryOperation 
-} from './test-helpers.js';
-
-// Generate unique test data
-const email = generateTestEmail();
-
-// Retry flaky operations
-await retryOperation(async () => {
-    // operation that might fail
-}, 3, 1000);
-```
+| Feature | Test File | Coverage |
+|---------|-----------|----------|
+| Stripe Billing | `advanced-features-regression.test.js`, `stripe.test.js` | ✅ Complete |
+| RBAC Permissions | `advanced-features-regression.test.js`, `security.test.js` | ✅ Complete |
+| Quota Enforcement | `advanced-features-regression.test.js`, `quota.test.js` | ✅ Complete |
+| Rate Limiting | `advanced-features-regression.test.js`, `security.test.js` | ✅ Complete |
+| WebSocket | `advanced-features-regression.test.js`, `websocket-notifications.test.js` | ✅ Complete |
+| Background Jobs | `advanced-features-regression.test.js`, `queue.test.js` | ✅ Complete |
+| Report Generation | `advanced-features-regression.test.js`, `report-generation.test.js` | ✅ Complete |
+| Tenant Isolation | `tenant-isolation.test.js`, `tenant-isolation.unit.test.js` | ✅ Complete |
+| Security | `security.test.js`, `token-hashing.test.js` | ✅ Complete |
+| Authentication | `auth.test.js` | ✅ Complete |
+| Mobile API | `mobile-api.test.js` | ✅ Complete |
 
 ## CI/CD Integration
 
-### GitHub Actions Example
+### GitHub Actions
 
 ```yaml
-name: E2E Tests
-
+name: Test Suite
 on: [push, pull_request]
-
 jobs:
-  e2e:
+  test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+      redis:
+        image: redis:7
     steps:
       - uses: actions/checkout@v3
-      
-      - name: Start test environment
-        run: docker-compose -f docker-compose.test.yml up -d
-      
-      - name: Wait for services
-        run: sleep 30
-      
-      - name: Run E2E tests
-        run: docker-compose -f docker-compose.test.yml exec -T app-test npm run test:e2e
-      
-      - name: Cleanup
-        if: always()
-        run: docker-compose -f docker-compose.test.yml down -v
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - run: npm install
+      - run: npm run prisma:migrate
+      - run: npm run seed:rbac
+      - run: npm test
 ```
+
+## Test Best Practices
+
+1. **Isolation** - Each test creates and cleans up its own data
+2. **Independence** - Tests can run in any order
+3. **Idempotency** - Tests can be run multiple times
+4. **Fast Execution** - Tests complete in seconds
+5. **Clear Assertions** - Descriptive expect statements
+6. **Error Handling** - Graceful handling of missing services
 
 ## Troubleshooting
 
-### Tests Timing Out
+### Redis Connection Failed
+```bash
+# Start Redis
+redis-server
 
-- Increase `waitForService` maxAttempts
-- Check service health: `docker-compose ps`
-- View logs: `docker-compose logs app`
+# Or with Docker
+docker run -d -p 6379:6379 redis:7
+```
 
-### Database Connection Errors
+### Database Connection Failed
+```bash
+# Check DATABASE_URL is set correctly
+echo $DATABASE_URL
 
-- Ensure Prisma schema is pushed: `npx prisma db push`
-- Check DATABASE_URL environment variable
-- Verify PostgreSQL is running and healthy
+# Run migrations
+npm run prisma:migrate
+```
 
-### Authentication Failures
+### WebSocket Tests Timeout
+- Ensure server is running on TEST_SERVER_URL
+- Check JWT_SECRET matches server config
+- Tests will skip gracefully if unavailable
 
-- Verify JWT_SECRET is set
-- Check token generation in authService
-- Ensure email verification is bypassed in tests
+### Stripe Tests Skipped
+- Set STRIPE_SECRET_KEY to enable Stripe tests
+- Tests automatically skip if not configured
 
-### Tenant Isolation Failures
+## Documentation
 
-- Review Prisma middleware in `prismaClient.js`
-- Check organizationId is set correctly
-- Verify RLS policies (if applicable)
+- **Advanced Regression Tests:** [README_ADVANCED_REGRESSION.md](./README_ADVANCED_REGRESSION.md)
+- **Monitoring Tests:** [README_MONITORING_TESTS.md](./README_MONITORING_TESTS.md)
+- **Load Testing:** [load-testing/README.md](./load-testing/README.md)
 
-## Best Practices
+## Contributing
 
-1. **Always cleanup test data** - Use try/finally blocks
-2. **Use unique identifiers** - Prevent test collisions
-3. **Mock external services** - Email, payments, etc.
-4. **Test realistic scenarios** - Mirror production workflows
-5. **Keep tests independent** - No test should depend on another
-6. **Validate tenant isolation** - Always test multi-tenancy
-7. **Handle async properly** - Use await, not callbacks
-8. **Log meaningful output** - Help debugging failures
-9. **Test error paths** - Not just happy paths
-10. **Keep tests fast** - Use parallelization where possible
+When adding new features:
 
-## Monitoring & Metrics
-
-Tests automatically track:
-- Total execution time
-- Individual test durations
-- Success/failure rates
-- API response times
-- Database query performance
-
-## Security Considerations
-
-- Test credentials are hardcoded (never use in production)
-- Test database is isolated from production
-- Stripe test mode keys only
-- No real emails sent in test environment
-- All test data is automatically deleted
+1. Add regression tests to `advanced-features-regression.test.js`
+2. Create feature-specific test file if needed
+3. Update test coverage table
+4. Document test requirements and setup
+5. Ensure tests pass in CI/CD pipeline
 
 ## Support
 
-For issues or questions:
-1. Check test logs for detailed error messages
-2. Review service health endpoints
-3. Validate environment configuration
-4. Consult main application documentation
+For test-related issues:
+1. Check relevant README documentation
+2. Review test output for specific errors
+3. Verify environment setup
+4. Check service logs (Redis, PostgreSQL, application)
+5. Consult feature documentation in `/docs`
