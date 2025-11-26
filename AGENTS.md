@@ -7,7 +7,9 @@
 # Local development
 npm install
 cd server && npm install
-cp .env.local .env
+
+# Copy environment template
+cp config/environments/.env.development .env
 
 # IMPORTANT: Configure required environment variables in .env:
 # - JWT_SECRET (required) - Secret key for JWT access tokens
@@ -16,13 +18,13 @@ cp .env.local .env
 
 # Docker setup (recommended)
 npm run docker:up
-docker-compose exec app npx prisma db push
+docker-compose -f docker/docker-compose.yml exec app npx prisma db push
 ```
 
 **Build:**
 ```bash
 # Docker production build
-docker build -t hse-digital:latest .
+docker build -f docker/Dockerfile -t hse-digital:latest .
 
 # Or with docker-compose
 npm run docker:build
@@ -37,7 +39,7 @@ npm run lint
 **Test:**
 ```bash
 # Run tests in Docker
-docker-compose exec app npm test
+docker-compose -f docker/docker-compose.yml exec app npm test
 
 # Local tests (requires dependencies)
 cd server && npm test

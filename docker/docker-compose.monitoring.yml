@@ -4,8 +4,8 @@ services:
   # --- Main Application ---
   app:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
       target: production
     container_name: hse_app
     restart: unless-stopped

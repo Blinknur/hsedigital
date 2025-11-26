@@ -3,8 +3,8 @@ version: '3.8'
 services:
   app-us-east:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     container_name: hse_app_us_east
     environment:
       - NODE_ENV=production
@@ -22,8 +22,8 @@ services:
 
   app-eu-west:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     container_name: hse_app_eu_west
     environment:
       - NODE_ENV=production

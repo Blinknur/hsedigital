@@ -2,7 +2,8 @@ node_modules/
 dist/
 build/
 .env
-.env.local
+.env.*
+!.env.example
 *.log
 .DS_Store
 .vscode/
@@ -47,8 +48,11 @@ sdks/python/venv/
 .pytest_cache/
 .mypy_cache/
 
-# Multi-region environment files
-.env.multiregion
+# Environment files (templates in config/environments/ are tracked)
+.env
+.env.*
+!.env.example
+!config/environments/.env.*
 
 # Tenant Migration Backups
 backups/

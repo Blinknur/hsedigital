@@ -2,7 +2,6 @@
 import express from 'express';
 import cors from 'cors';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -72,19 +71,7 @@ import { geoLocationMiddleware, tenantRegionRouting, cdnHeadersMiddleware, geoRo
 import { replicaManager } from './utils/databaseReplicaManager.js';
 import { redisClusterManager } from './utils/redisClusterManager.js';
 import { failoverManager } from './services/failoverManager.js';
-
-dotenv.config();
-
-function validateRequiredEnvVars() {
-    const required = ['JWT_SECRET', 'REFRESH_SECRET'];
-    const missing = required.filter(key => !process.env[key]);
-    
-    if (missing.length > 0) {
-        console.error(`❌ FATAL: Missing required environment variables: ${missing.join(', ')}`);
-        console.error('Please configure these variables in your .env file before starting the server.');
-        process.exit(1);
-    }
-}
+import config, { validateRequiredEnvVars } from '../config/index.js';
 
 validateRequiredEnvVars();
 
@@ -94,9 +81,9 @@ initializeTracing();
 startAllProcessors();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET;
-const REFRESH_SECRET = process.env.REFRESH_SECRET;
+const PORT = config.port;
+const JWT_SECRET = config.jwt.secret;
+const REFRESH_SECRET = config.jwt.refreshSecret;
 
 // Setup __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
