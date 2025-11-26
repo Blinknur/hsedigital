@@ -42,62 +42,69 @@ router.post('/signup-with-org', authRateLimit, asyncHandler(async (req, res) => 
         return res.status(400).json({ error: 'Invalid subdomain format' });
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
-        return res.status(409).json({ error: 'Email already registered' });
-    }
-
-    const existingOrg = await prisma.organization.findFirst({
-        where: { subdomain: subdomain.toLowerCase() }
-    });
-    if (existingOrg) {
-        return res.status(409).json({ error: 'Subdomain already taken' });
-    }
-
     const hashedPassword = await authService.hashPassword(password);
     const emailVerificationToken = authService.generateEmailVerificationToken();
     const hashedEmailToken = authService.hashToken(emailVerificationToken);
     const emailVerificationExpires = authService.getEmailVerificationExpiry();
 
-    const organization = await prisma.organization.create({
-        data: {
-            name: organizationName,
-            subdomain: subdomain.toLowerCase(),
-            subscriptionPlan: 'free',
+    try {
+        const result = await prisma.$transaction(async (tx) => {
+            const organization = await tx.organization.create({
+                data: {
+                    name: organizationName,
+                    subdomain: subdomain.toLowerCase(),
+                    subscriptionPlan: 'free',
+                    ownerId: 'temp',
+                }
+            });
+
+            const user = await tx.user.create({
+                data: {
+                    name,
+                    email,
+                    password: hashedPassword,
+                    role: 'Admin',
+                    organizationId: organization.id,
+                    emailVerificationToken: hashedEmailToken,
+                    emailVerificationExpires,
+                    isEmailVerified: false,
+                }
+            });
+
+            await tx.organization.update({
+                where: { id: organization.id },
+                data: { ownerId: user.id }
+            });
+
+            return { organization, user };
+        });
+
+        await emailService.sendVerificationEmail(email, emailVerificationToken);
+
+        const { password: _, emailVerificationToken: __, ...userInfo } = result.user;
+
+        res.status(201).json({
+            message: 'Account created successfully! Please check your email to verify your account.',
+            user: userInfo,
+            organization: {
+                id: result.organization.id,
+                name: result.organization.name,
+                subdomain: result.organization.subdomain
+            }
+        });
+    } catch (error) {
+        if (error.code === 'P2002') {
+            const target = error.meta?.target;
+            if (target?.includes('subdomain')) {
+                return res.status(409).json({ error: 'Subdomain already taken' });
+            }
+            if (target?.includes('email')) {
+                return res.status(409).json({ error: 'Email already registered' });
+            }
+            return res.status(409).json({ error: 'Resource already exists' });
         }
-    });
-
-    const user = await prisma.user.create({
-        data: {
-            name,
-            email,
-            password: hashedPassword,
-            role: 'Admin',
-            organizationId: organization.id,
-            emailVerificationToken: hashedEmailToken,
-            emailVerificationExpires,
-            isEmailVerified: false,
-        }
-    });
-
-    await prisma.organization.update({
-        where: { id: organization.id },
-        data: { ownerId: user.id }
-    });
-
-    await emailService.sendVerificationEmail(email, emailVerificationToken);
-
-    const { password: _, emailVerificationToken: __, ...userInfo } = user;
-
-    res.status(201).json({
-        message: 'Account created successfully! Please check your email to verify your account.',
-        user: userInfo,
-        organization: {
-            id: organization.id,
-            name: organization.name,
-            subdomain: organization.subdomain
-        }
-    });
+        throw error;
+    }
 }));
 
 // REGISTER
@@ -410,38 +417,6 @@ router.post('/logout-all', authRateLimit, asyncHandler(async (req, res) => {
     res.json({ message: 'Logged out from all devices' });
 }));
 
-// SELF-SERVICE ORGANIZATION SIGNUP
-router.post('/signup-with-org', asyncHandler(async (req, res) => {
-    const validation = signupWithOrgSchema.safeParse(req.body);
-    
-    if (!validation.success) {
-        return res.status(400).json({ 
-            error: 'Validation failed', 
-            details: validation.error.errors 
-        });
-    }
 
-    const { name, email, password, organizationName } = validation.data;
-
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
-        return res.status(409).json({ error: 'Email already registered' });
-    }
-
-    const result = await provisionOrganization({
-        organizationName,
-        ownerName: name,
-        ownerEmail: email,
-        ownerPassword: password
-    });
-
-    res.status(201).json({
-        message: 'Organization created successfully. Please check your email to verify your account.',
-        organization: result.organization,
-        user: result.user,
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken
-    });
-}));
 
 export default router;

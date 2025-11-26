@@ -42,6 +42,7 @@ sdks/python/dist/
 sdks/python/*.egg-info/
 sdks/python/__pycache__/
 sdks/python/**/__pycache__/
+sdks/python/venv/
 *.pyc
 .pytest_cache/
 .mypy_cache/

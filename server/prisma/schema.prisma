@@ -69,29 +69,31 @@ model UserRole {
 // ==================== EXISTING MODELS ====================
 
 model Organization {
-  id                     String    @id @default(cuid())
-  name                   String
-  ownerId                String
-  subscriptionPlan       String    @default("free")
-  subscriptionStatus     String    @default("active")
-  ssoConfig              Json?
-  stripeCustomerId       String?   @unique
-  stripeSubscriptionId   String?   @unique
-  monthlyRevenue         Float     @default(0)
-  lastActivityAt         DateTime?
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  id                   String    @id @default(cuid())
+  name                 String
+  subdomain            String?   @unique
+  slug                 String?   @unique
+  ownerId              String
+  subscriptionPlan     String    @default("free")
+  subscriptionStatus   String    @default("active")
+  ssoConfig            Json?
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  monthlyRevenue       Float     @default(0)
+  lastActivityAt       DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  users            User[]
-  stations         Station[]
-  contractors      Contractor[]
-  audits           Audit[]
-  forms            FormDefinition[]
-  incidents        Incident[]
-  workPermits      WorkPermit[]
-  reports          Report[]
-  reportTemplates  ReportTemplate[]
-  reportSchedules  ReportSchedule[]
+  users           User[]
+  stations        Station[]
+  contractors     Contractor[]
+  audits          Audit[]
+  forms           FormDefinition[]
+  incidents       Incident[]
+  workPermits     WorkPermit[]
+  reports         Report[]
+  reportTemplates ReportTemplate[]
+  reportSchedules ReportSchedule[]
 
   @@map("organizations")
 }
@@ -280,24 +282,24 @@ model AuditLog {
 }
 
 model Report {
-  id               String    @id @default(cuid())
-  organizationId   String
-  name             String
-  type             String
-  format           String    @default("pdf")
-  status           String    @default("pending")
-  filters          Json      @default("{}")
-  parameters       Json      @default("{}")
-  generatedBy      String?
-  scheduledAt      DateTime?
-  generatedAt      DateTime?
-  fileUrl          String?
-  fileKey          String?
-  fileSize         Int?
-  error            String?
-  metadata         Json      @default("{}")
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  type           String
+  format         String    @default("pdf")
+  status         String    @default("pending")
+  filters        Json      @default("{}")
+  parameters     Json      @default("{}")
+  generatedBy    String?
+  scheduledAt    DateTime?
+  generatedAt    DateTime?
+  fileUrl        String?
+  fileKey        String?
+  fileSize       Int?
+  error          String?
+  metadata       Json      @default("{}")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -310,16 +312,16 @@ model Report {
 }
 
 model ReportTemplate {
-  id               String   @id @default(cuid())
-  organizationId   String
-  name             String
-  description      String?
-  type             String
-  template         Json
-  isDefault        Boolean  @default(false)
-  branding         Json?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  type           String
+  template       Json
+  isDefault      Boolean  @default(false)
+  branding       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -329,19 +331,19 @@ model ReportTemplate {
 }
 
 model ReportSchedule {
-  id               String    @id @default(cuid())
-  organizationId   String
-  name             String
-  reportType       String
-  cronExpression   String
-  filters          Json      @default("{}")
-  parameters       Json      @default("{}")
-  recipients       String[]
-  isActive         Boolean   @default(true)
-  lastRunAt        DateTime?
-  nextRunAt        DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  reportType     String
+  cronExpression String
+  filters        Json      @default("{}")
+  parameters     Json      @default("{}")
+  recipients     String[]
+  isActive       Boolean   @default(true)
+  lastRunAt      DateTime?
+  nextRunAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -384,7 +386,7 @@ model DashboardWidget {
 }
 
 model MaintenanceAlert {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   stationId      String
   alertType      String
@@ -392,11 +394,11 @@ model MaintenanceAlert {
   message        String
   predictedDate  DateTime?
   confidence     Float?
-  isResolved     Boolean  @default(false)
+  isResolved     Boolean   @default(false)
   resolvedAt     DateTime?
   metadata       Json?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([organizationId])
   @@index([stationId])
