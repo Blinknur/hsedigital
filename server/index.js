@@ -50,8 +50,7 @@ import { httpLogger } from './middleware/logging.js';
 import { metricsMiddleware } from './middleware/metrics.js';
 import { sentryContextMiddleware, sentryPerformanceMiddleware } from './middleware/sentry.js';
 import { tracingMiddleware, enrichTracingContext, addTenantTierToSpan } from './middleware/tracing.js';
-import { createInstrumentedPrismaClient } from './utils/prisma-instrumented.js';
-import { createTracedPrismaClient } from './utils/tracedPrismaClient.js';
+import prisma from './utils/db.js';
 import { alertManager } from './monitoring/alerts.js';
 import { advancedAlertingService } from './services/alertingService.js';
 import backupRoutes from './routes/backup.js';
@@ -123,10 +122,7 @@ app.use(enrichTracingContext);
 
 app.use('/uploads', express.static(uploadDir));
 
-const prismaBase = createInstrumentedPrismaClient();
-const prisma = createTracedPrismaClient();
-
-logger.info('Initialized instrumented Prisma client');
+logger.info('Initialized shared Prisma client singleton');
 
 // Initialize AI Client
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
