@@ -309,7 +309,7 @@ app.get('/api/usage/current', authenticateToken, ...tenantContextWithTracing, as
 }));
 
 // --- BILLING ---
-app.use('/api/billing', authenticateToken, billingRoutes);
+app.use('/api/billing', authenticateToken, ...tenantContextWithTracing, billingRoutes);
 
 // --- ORGANIZATIONS ---
 app.use('/api/organizations', organizationsRouter);

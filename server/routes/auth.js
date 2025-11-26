@@ -3,6 +3,7 @@ import prisma from '../utils/db.js';
 import { authService, registerSchema, loginSchema, passwordResetRequestSchema, passwordResetSchema, signupWithOrgSchema } from '../services/authService.js';
 import { emailService } from '../services/emailService.js';
 import { provisionOrganization } from '../services/tenantProvisioning.js';
+import { authRateLimit } from '../middleware/rateLimitRedis.js';
 
 const router = express.Router();
 
@@ -11,7 +12,7 @@ const asyncHandler = (fn) => (req, res, next) => {
 };
 
 // CHECK SUBDOMAIN AVAILABILITY
-router.get('/check-subdomain', asyncHandler(async (req, res) => {
+router.get('/check-subdomain', authRateLimit, asyncHandler(async (req, res) => {
     const { subdomain } = req.query;
 
     if (!subdomain || typeof subdomain !== 'string') {
@@ -30,7 +31,7 @@ router.get('/check-subdomain', asyncHandler(async (req, res) => {
 }));
 
 // SIGNUP WITH ORGANIZATION
-router.post('/signup-with-org', asyncHandler(async (req, res) => {
+router.post('/signup-with-org', authRateLimit, asyncHandler(async (req, res) => {
     const { organizationName, subdomain, name, email, password } = req.body;
 
     if (!organizationName || !subdomain || !name || !email || !password) {
@@ -100,7 +101,7 @@ router.post('/signup-with-org', asyncHandler(async (req, res) => {
 }));
 
 // REGISTER
-router.post('/register', asyncHandler(async (req, res) => {
+router.post('/register', authRateLimit, asyncHandler(async (req, res) => {
     const validation = registerSchema.safeParse(req.body);
     
     if (!validation.success) {
@@ -146,7 +147,7 @@ router.post('/register', asyncHandler(async (req, res) => {
 }));
 
 // LOGIN
-router.post('/login', asyncHandler(async (req, res) => {
+router.post('/login', authRateLimit, asyncHandler(async (req, res) => {
     const validation = loginSchema.safeParse(req.body);
     
     if (!validation.success) {
@@ -189,7 +190,7 @@ router.post('/login', asyncHandler(async (req, res) => {
 }));
 
 // VERIFY EMAIL
-router.post('/verify-email', asyncHandler(async (req, res) => {
+router.post('/verify-email', authRateLimit, asyncHandler(async (req, res) => {
     const { token } = req.body;
 
     if (!token) {
@@ -222,7 +223,7 @@ router.post('/verify-email', asyncHandler(async (req, res) => {
 }));
 
 // RESEND VERIFICATION EMAIL
-router.post('/resend-verification', asyncHandler(async (req, res) => {
+router.post('/resend-verification', authRateLimit, asyncHandler(async (req, res) => {
     const { email } = req.body;
 
     if (!email) {
@@ -257,7 +258,7 @@ router.post('/resend-verification', asyncHandler(async (req, res) => {
 }));
 
 // REQUEST PASSWORD RESET
-router.post('/password-reset-request', asyncHandler(async (req, res) => {
+router.post('/password-reset-request', authRateLimit, asyncHandler(async (req, res) => {
     const validation = passwordResetRequestSchema.safeParse(req.body);
     
     if (!validation.success) {
@@ -297,7 +298,7 @@ router.post('/password-reset-request', asyncHandler(async (req, res) => {
 }));
 
 // RESET PASSWORD
-router.post('/password-reset', asyncHandler(async (req, res) => {
+router.post('/password-reset', authRateLimit, asyncHandler(async (req, res) => {
     const validation = passwordResetSchema.safeParse(req.body);
     
     if (!validation.success) {
@@ -339,7 +340,7 @@ router.post('/password-reset', asyncHandler(async (req, res) => {
 }));
 
 // REFRESH TOKEN
-router.post('/refresh', asyncHandler(async (req, res) => {
+router.post('/refresh', authRateLimit, asyncHandler(async (req, res) => {
     const { refreshToken } = req.body;
 
     if (!refreshToken) {
@@ -373,7 +374,7 @@ router.post('/refresh', asyncHandler(async (req, res) => {
 }));
 
 // LOGOUT
-router.post('/logout', asyncHandler(async (req, res) => {
+router.post('/logout', authRateLimit, asyncHandler(async (req, res) => {
     const { refreshToken } = req.body;
 
     if (!refreshToken) {
@@ -390,7 +391,7 @@ router.post('/logout', asyncHandler(async (req, res) => {
 }));
 
 // LOGOUT ALL DEVICES
-router.post('/logout-all', asyncHandler(async (req, res) => {
+router.post('/logout-all', authRateLimit, asyncHandler(async (req, res) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
