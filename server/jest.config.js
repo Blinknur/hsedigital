@@ -9,6 +9,7 @@ export default {
   
   testMatch: [
     '**/tests/**/*.test.js',
+    '**/src/tests/**/*.test.js',
     '**/__tests__/**/*.test.js',
   ],
   
@@ -36,6 +37,8 @@ export default {
     '!src/**/*.config.js',
   ],
   
+  coverageReporters: ['html', 'text', 'lcov', 'json-summary'],
+  
   coverageThreshold: {
     global: {
       branches: 60,
@@ -45,7 +48,10 @@ export default {
     },
   },
   
-  setupFilesAfterEnv: ['<rootDir>/tests/setup/jest.setup.js'],
+  setupFilesAfterEnv: [
+    '<rootDir>/tests/setup/jest.setup.js',
+    '<rootDir>/jest.setup.js'
+  ],
   
   globalSetup: '<rootDir>/tests/setup/global-setup.js',
   
@@ -66,4 +72,33 @@ export default {
   resetMocks: false,
   
   restoreMocks: false,
+  
+  bail: false,
+  
+  reporters: [
+    'default',
+    [
+      'jest-html-reporter',
+      {
+        pageTitle: 'HSE Digital - Test Report',
+        outputPath: 'test-results/index.html',
+        includeFailureMsg: true,
+        includeConsoleLog: true,
+        sort: 'status',
+        executionTimeWarningThreshold: 5,
+        dateFormat: 'yyyy-mm-dd HH:MM:ss'
+      }
+    ],
+    [
+      'jest-junit',
+      {
+        outputDirectory: 'test-results',
+        outputName: 'junit.xml',
+        classNameTemplate: '{classname}',
+        titleTemplate: '{title}',
+        ancestorSeparator: ' › ',
+        usePathForSuiteName: true
+      }
+    ]
+  ],
 };

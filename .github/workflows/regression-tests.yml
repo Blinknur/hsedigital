@@ -1,0 +1,353 @@
+name: Regression Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * *'
+
+jobs:
+  critical-tests:
+    name: Critical Tests (Auth, Tenant Isolation, Billing)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: hse_test
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: hse_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          npm ci --prefix server
+
+      - name: Generate Prisma Client
+        run: cd server && npx prisma generate
+
+      - name: Push Prisma Schema
+        run: cd server && npx prisma db push --skip-generate
+        env:
+          DATABASE_URL: postgresql://hse_test:test_password@localhost:5432/hse_test
+
+      - name: Run Critical Regression Tests
+        run: cd server && npm run test:regression:critical
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://hse_test:test_password@localhost:5432/hse_test
+          JWT_SECRET: test-secret-key-for-ci
+          REFRESH_SECRET: test-refresh-secret-for-ci
+          CLIENT_URL: http://localhost:3001
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: critical-coverage-report
+          path: server/coverage/
+          retention-days: 30
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: critical-test-results
+          path: |
+            server/test-results/
+            server/coverage/coverage-summary.json
+          retention-days: 30
+
+      - name: Comment PR with Test Results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const fs = require('fs');
+            const coveragePath = 'server/coverage/coverage-summary.json';
+            
+            if (!fs.existsSync(coveragePath)) {
+              console.log('Coverage file not found');
+              return;
+            }
+            
+            const coverage = JSON.parse(fs.readFileSync(coveragePath, 'utf8'));
+            const total = coverage.total;
+            
+            const body = `## 🧪 Critical Test Results
+            
+            | Metric | Coverage |
+            |--------|----------|
+            | Lines | ${total.lines.pct}% (${total.lines.covered}/${total.lines.total}) |
+            | Statements | ${total.statements.pct}% (${total.statements.covered}/${total.statements.total}) |
+            | Functions | ${total.functions.pct}% (${total.functions.covered}/${total.functions.total}) |
+            | Branches | ${total.branches.pct}% (${total.branches.covered}/${total.branches.total}) |
+            
+            **Tests:** Critical (Auth, Tenant Isolation, Billing)
+            **Status:** ${{ job.status }}
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  fast-tests:
+    name: Fast Regression Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: hse_test
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: hse_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefix server
+
+      - name: Generate Prisma Client
+        run: cd server && npx prisma generate
+
+      - name: Push Prisma Schema
+        run: cd server && npx prisma db push --skip-generate
+        env:
+          DATABASE_URL: postgresql://hse_test:test_password@localhost:5432/hse_test
+
+      - name: Run Fast Regression Tests
+        run: cd server && npm run test:regression:fast
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://hse_test:test_password@localhost:5432/hse_test
+          JWT_SECRET: test-secret-key-for-ci
+          REFRESH_SECRET: test-refresh-secret-for-ci
+          CLIENT_URL: http://localhost:3001
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fast-coverage-report
+          path: server/coverage/
+          retention-days: 14
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fast-test-results
+          path: server/test-results/
+          retention-days: 14
+
+  full-regression:
+    name: Full Regression Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: hse_test
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: hse_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefix server
+
+      - name: Generate Prisma Client
+        run: cd server && npx prisma generate
+
+      - name: Push Prisma Schema
+        run: cd server && npx prisma db push --skip-generate
+        env:
+          DATABASE_URL: postgresql://hse_test:test_password@localhost:5432/hse_test
+
+      - name: Run Full Regression Tests
+        run: cd server && npm run test:regression
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://hse_test:test_password@localhost:5432/hse_test
+          JWT_SECRET: test-secret-key-for-ci
+          REFRESH_SECRET: test-refresh-secret-for-ci
+          CLIENT_URL: http://localhost:3001
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+
+      - name: Upload Full Coverage Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: full-coverage-report
+          path: server/coverage/
+          retention-days: 90
+
+      - name: Upload Full Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: full-test-results
+          path: server/test-results/
+          retention-days: 90
+
+      - name: Upload Coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: ./server/coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+  notify-on-failure:
+    name: Notify on Test Failure
+    runs-on: ubuntu-latest
+    needs: [critical-tests, fast-tests]
+    if: failure()
+
+    steps:
+      - name: Send Failure Notification
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const issue_title = `🚨 Regression Tests Failed - ${context.payload.head_commit?.message || 'Unknown commit'}`;
+            const issue_body = `## Test Failure Report
+            
+            **Workflow:** ${context.workflow}
+            **Run ID:** ${context.runId}
+            **Branch:** ${context.ref}
+            **Commit:** ${context.sha}
+            **Author:** ${context.actor}
+            **Triggered by:** ${context.eventName}
+            
+            ### Failed Jobs
+            - Critical Tests: ${{ needs.critical-tests.result }}
+            - Fast Tests: ${{ needs.fast-tests.result }}
+            
+            [View Full Results](${context.payload.repository.html_url}/actions/runs/${context.runId})
+            
+            ### Next Steps
+            1. Review the test failures in the workflow logs
+            2. Check the uploaded test results and coverage reports
+            3. Fix failing tests or update test expectations
+            4. Re-run the workflow after fixes
+            
+            ---
+            *This issue was automatically created by the regression test workflow*
+            `;
+            
+            if (context.eventName === 'pull_request') {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: issue_body
+              });
+            } else {
+              github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issue_title,
+                body: issue_body,
+                labels: ['test-failure', 'automated']
+              });
+            }

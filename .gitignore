@@ -65,3 +65,11 @@ server/backups/
 server/fix-imports.sh
 server/update-imports.js
 server/update-imports.py
+
+# Test coverage and results
+server/coverage/
+server/test-results/
+server/.nyc_output/
+*.lcov
+junit.xml
+test-report.html

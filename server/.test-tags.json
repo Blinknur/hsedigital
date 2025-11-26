@@ -1,0 +1,46 @@
+{
+  "critical": [
+    "auth.test.js",
+    "tenant-isolation.test.js",
+    "tenant-isolation.unit.test.js",
+    "stripe.test.js",
+    "stripe-unit.test.js",
+    "security.test.js",
+    "token-hashing.test.js"
+  ],
+  "fast": [
+    "auth.test.js",
+    "tenant-isolation.unit.test.js",
+    "stripe-unit.test.js",
+    "token-hashing.test.js",
+    "analytics.test.js",
+    "queue.test.js",
+    "quota.test.js"
+  ],
+  "slow": [
+    "e2e-integration.test.js",
+    "tenant-isolation.test.js",
+    "stripe.test.js",
+    "report-generation.test.js",
+    "websocket-notifications.test.js",
+    "performance.test.js",
+    "monitoring.test.js"
+  ],
+  "integration": [
+    "e2e-integration.test.js",
+    "tenant-isolation.test.js",
+    "stripe.test.js",
+    "mobile-api.test.js",
+    "websocket-notifications.test.js"
+  ],
+  "unit": [
+    "auth.test.js",
+    "tenant-isolation.unit.test.js",
+    "stripe-unit.test.js",
+    "token-hashing.test.js",
+    "analytics.test.js",
+    "audit-log.test.js",
+    "queue.test.js",
+    "quota.test.js"
+  ]
+}
