@@ -1,12 +1,11 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { requirePermission, requireRole } from '../middleware/rbac.js';
 import { tenantCacheMiddleware, invalidateTenantCacheMiddleware } from '../middleware/caching.js';
 import { getTenantById, getTenantWithUsers, invalidateTenantCache } from '../services/tenantService.js';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 router.get(
   '/:id',

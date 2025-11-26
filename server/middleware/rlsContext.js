@@ -1,6 +1,25 @@
+import prisma from '../utils/db.js';
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+const globalForAdminPrisma = globalThis;
+
+const getAdminPrisma = () => {
+    if (!globalForAdminPrisma.adminPrisma) {
+        const adminDbUrl = process.env.DATABASE_URL_ADMIN;
+        
+        if (!adminDbUrl) {
+            throw new Error('DATABASE_URL_ADMIN not configured');
+        }
+        
+        globalForAdminPrisma.adminPrisma = new PrismaClient({
+            datasources: {
+                db: { url: adminDbUrl }
+            }
+        });
+    }
+    
+    return globalForAdminPrisma.adminPrisma;
+};
 
 /**
  * Middleware to set RLS (Row-Level Security) context for tenant isolation
@@ -52,23 +71,8 @@ export const withRlsContext = async (organizationId, callback) => {
  * @returns {Promise} Result of the callback
  */
 export const withAdminAccess = async (callback) => {
-    const adminDbUrl = process.env.DATABASE_URL_ADMIN;
-    
-    if (!adminDbUrl) {
-        throw new Error('DATABASE_URL_ADMIN not configured');
-    }
-    
-    const adminPrisma = new PrismaClient({
-        datasources: {
-            db: { url: adminDbUrl }
-        }
-    });
-    
-    try {
-        return await callback(adminPrisma);
-    } finally {
-        await adminPrisma.$disconnect();
-    }
+    const adminPrisma = getAdminPrisma();
+    return await callback(adminPrisma);
 };
 
 export default { rlsContext, withRlsContext, withAdminAccess };

@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../utils/db.js';
 
 async function testAuditLogSystem() {
     console.log('🧪 Testing Audit Log System...\n');

@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/db.js';
 import {
   tenantFeatureUsage,
   tenantDataStorage,
@@ -10,8 +10,6 @@ import {
   tenantDatabaseOperations,
   tenantPerformanceScore
 } from '../utils/metrics.js';
-
-const prisma = new PrismaClient();
 
 const SUBSCRIPTION_PLAN_VALUES = {
   free: 0,

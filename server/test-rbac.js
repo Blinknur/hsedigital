@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from './utils/db.js';
 
 async function testRBAC() {
     console.log('Testing RBAC setup...\n');

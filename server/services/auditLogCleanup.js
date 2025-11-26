@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../utils/db.js';
 
 const RETENTION_DAYS = parseInt(process.env.AUDIT_LOG_RETENTION_DAYS || '365');
 

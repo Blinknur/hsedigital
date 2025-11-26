@@ -1,5 +1,5 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/db.js';
 import { authenticateToken, tenantContext } from '../middleware/auth.js';
 import { requirePermission } from '../middleware/rbac.js';
 import { buildCursorPagination, formatCursorResponse, buildOffsetPagination, formatOffsetResponse } from '../utils/pagination.js';
@@ -7,7 +7,6 @@ import { cacheManager } from '../utils/cache.js';
 import { tenantCacheMiddleware, invalidateTenantCacheMiddleware } from '../middleware/caching.js';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 router.get(
   '/',

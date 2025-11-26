@@ -1,8 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/db.js';
 import { authService } from './authService.js';
 import { emailService } from './emailService.js';
-
-const prisma = new PrismaClient();
 
 function generateSlug(name) {
     return name

@@ -1,8 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/db.js';
 import { provisionOrganization } from '../services/tenantProvisioning.js';
 import { authService } from '../services/authService.js';
-
-const prisma = new PrismaClient();
 
 async function cleanup() {
     try {

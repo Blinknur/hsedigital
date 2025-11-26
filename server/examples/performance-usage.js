@@ -1,9 +1,7 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/db.js';
 import { cacheManager } from '../utils/cache.js';
 import { buildCursorPagination, formatCursorResponse } from '../utils/pagination.js';
 import { getTenantById, batchGetTenants, invalidateTenantCache } from '../services/tenantService.js';
-
-const prisma = new PrismaClient();
 
 export const cacheUsageExamples = {
   simpleCache: async () => {

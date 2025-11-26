@@ -1,11 +1,10 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/db.js';
 import { authService, registerSchema, loginSchema, passwordResetRequestSchema, passwordResetSchema, signupWithOrgSchema } from '../services/authService.js';
 import { emailService } from '../services/emailService.js';
 import { provisionOrganization } from '../services/tenantProvisioning.js';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 const asyncHandler = (fn) => (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);

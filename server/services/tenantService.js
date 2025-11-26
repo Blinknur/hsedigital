@@ -1,8 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/db.js';
 import { cacheManager } from '../utils/cache.js';
 import { logger } from '../utils/logger.js';
-
-const prisma = new PrismaClient();
 
 const TENANT_CACHE_TTL = 600;
 

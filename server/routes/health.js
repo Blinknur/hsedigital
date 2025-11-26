@@ -1,11 +1,10 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/db.js';
 import Redis from 'ioredis';
 
 const router = express.Router();
 
 let redisClient;
-let prismaClient;
 
 const initClients = () => {
   if (!redisClient) {
@@ -18,15 +17,11 @@ const initClients = () => {
       lazyConnect: true
     });
   }
-  
-  if (!prismaClient) {
-    prismaClient = new PrismaClient();
-  }
 };
 
 const checkDatabase = async () => {
   try {
-    await prismaClient.$queryRaw`SELECT 1`;
+    await prisma.$queryRaw`SELECT 1`;
     return { status: 'healthy', message: 'Database connection successful' };
   } catch (error) {
     return { 

@@ -1,8 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import basePrisma from '../utils/db.js';
 import { prisma, setTenantContext, clearTenantContext, getTenantContext } from '../utils/prismaClient.js';
 import { tenantService } from '../services/tenantService.js';
-
-const basePrisma = new PrismaClient();
 
 console.log('=== Tenant Isolation Tests ===\n');
 

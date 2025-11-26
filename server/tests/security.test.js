@@ -1,9 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import request from 'supertest';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/db.js';
 import app from '../index.js';
-
-const prisma = new PrismaClient();
 
 describe('Security Hardening Tests', () => {
     let authToken;

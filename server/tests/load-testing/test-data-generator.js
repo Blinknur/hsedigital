@@ -1,7 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../../utils/db.js';
 import bcrypt from 'bcrypt';
-
-const prisma = new PrismaClient();
 
 export class TestDataGenerator {
   constructor(volumeType = 'medium') {

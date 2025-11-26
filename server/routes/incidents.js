@@ -1,5 +1,5 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/db.js';
 import { authenticateToken, tenantContext } from '../middleware/auth.js';
 import { requirePermission } from '../middleware/rbac.js';
 import { buildCursorPagination, formatCursorResponse } from '../utils/pagination.js';
@@ -8,7 +8,6 @@ import { requireQuota, trackUsage } from '../middleware/quota.js';
 import { validateRequest, validateParams, incidentSchema, idParamSchema } from '../middleware/validation.js';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 router.get(
   '/',

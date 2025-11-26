@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/db.js';
 import {
     createCheckoutSession,
     handleCheckoutComplete,
@@ -6,8 +6,6 @@ import {
     handleSubscriptionDeleted,
     handlePaymentFailed
 } from '../services/stripeService.js';
-
-const prisma = new PrismaClient();
 
 async function testStripeIntegration() {
     console.log('🧪 Testing Stripe Integration...\n');

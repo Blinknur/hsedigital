@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/db.js';
 import { 
     getPlanLimits, 
     checkQuota, 
@@ -7,8 +7,6 @@ import {
     getUsageStats,
     checkFeatureAccess 
 } from '../services/quotaService.js';
-
-const prisma = new PrismaClient();
 
 describe('Quota Service', () => {
     let testOrgId;

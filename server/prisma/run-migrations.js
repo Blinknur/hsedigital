@@ -1,12 +1,10 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/db.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-const prisma = new PrismaClient();
 
 const MIGRATIONS = [
     '20240101000000_add_user_auth_fields',

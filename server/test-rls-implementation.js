@@ -10,9 +10,7 @@
  * 3. Set DATABASE_URL environment variable
  */
 
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from './utils/db.js';
 
 const colors = {
     reset: '\x1b[0m',

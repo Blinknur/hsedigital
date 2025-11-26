@@ -1,5 +1,5 @@
 import Redis from 'ioredis';
-import { PrismaClient } from '@prisma/client';
+import prisma from './utils/db.js';
 
 const redis = new Redis({
   host: process.env.REDIS_HOST || 'localhost',
@@ -10,8 +10,6 @@ const redis = new Redis({
     return delay;
   }
 });
-
-const prisma = new PrismaClient();
 
 const RATE_LIMIT_PLANS = {
   free: {

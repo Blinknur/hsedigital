@@ -3,10 +3,8 @@
  * Run with: node test-tenant-functionality.js
  */
 
-import { PrismaClient } from '@prisma/client';
+import prisma from './utils/db.js';
 import jwt from 'jsonwebtoken';
-
-const prisma = new PrismaClient();
 const JWT_SECRET = 'dev-secret-key-change-in-prod';
 
 // Simulate the withTenant helper from index.js

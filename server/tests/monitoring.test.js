@@ -1,17 +1,15 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@jest/globals';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../utils/db.js';
 import Redis from 'ioredis';
 import * as Sentry from '@sentry/node';
 
 const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:3001';
 
 describe('Comprehensive Monitoring Integration Tests', () => {
-  let prisma;
   let redis;
   let sentryMock;
 
   beforeAll(() => {
-    prisma = new PrismaClient();
     redis = new Redis({
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '6379', 10),
@@ -76,6 +74,7 @@ describe('Comprehensive Monitoring Integration Tests', () => {
 
   describe('Health Check Endpoints - Database Failure Scenarios', () => {
     it('should handle database connection errors gracefully', async () => {
+      const { PrismaClient } = await import('@prisma/client');
       const testPrisma = new PrismaClient({
         datasources: {
           db: {
@@ -99,6 +98,7 @@ describe('Comprehensive Monitoring Integration Tests', () => {
     });
 
     it('should handle database connection timeout gracefully', async () => {
+      const { PrismaClient } = await import('@prisma/client');
       const testPrisma = new PrismaClient({
         datasources: {
           db: {
