@@ -58,6 +58,7 @@ import { generateAIContent } from './services/tracedAiService.js';
 import alertingRoutes from './routes/alerting.js';
 import notificationsRouter from './routes/notifications.js';
 import mobileRouter from './routes/mobile.js';
+import analyticsRouter from './routes/analytics.js';
 import { initializeSocketIO } from './config/socket.js';
 import { setSocketIO } from './services/notificationService.js';
 import { createServer } from 'http';
@@ -237,6 +238,9 @@ app.use('/api/notifications', notificationsRouter);
 
 // MOBILE API ROUTES
 app.use('/api/mobile', mobileRouter);
+
+// ANALYTICS ROUTES
+app.use('/api/analytics', analyticsRouter);
 
 // JOBS ROUTES
 app.use('/api/jobs', authenticateToken, tenantContext, jobsRoutes);

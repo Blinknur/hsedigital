@@ -350,3 +350,56 @@ model ReportSchedule {
   @@index([nextRunAt])
   @@map("report_schedules")
 }
+
+model AnalyticsSnapshot {
+  id             String   @id @default(cuid())
+  organizationId String
+  snapshotDate   DateTime
+  metrics        Json
+  kpis           Json
+  trends         Json
+  predictions    Json?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([snapshotDate])
+  @@map("analytics_snapshots")
+}
+
+model DashboardWidget {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  widgetType     String
+  title          String
+  config         Json
+  position       Json
+  isVisible      Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([userId])
+  @@map("dashboard_widgets")
+}
+
+model MaintenanceAlert {
+  id             String   @id @default(cuid())
+  organizationId String
+  stationId      String
+  alertType      String
+  priority       String
+  message        String
+  predictedDate  DateTime?
+  confidence     Float?
+  isResolved     Boolean  @default(false)
+  resolvedAt     DateTime?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([stationId])
+  @@index([isResolved])
+  @@map("maintenance_alerts")
+}
