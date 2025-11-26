@@ -44,6 +44,8 @@ sdks/python/*.egg-info/
 sdks/python/__pycache__/
 sdks/python/**/__pycache__/
 sdks/python/venv/
+server/sdks/
+server/src/infrastructure/external/sdks/
 *.pyc
 .pytest_cache/
 .mypy_cache/
@@ -58,3 +60,8 @@ sdks/python/venv/
 backups/
 server/backups/
 *.zip
+
+# Restructure migration helper scripts (temporary)
+server/fix-imports.sh
+server/update-imports.js
+server/update-imports.py

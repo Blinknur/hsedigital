@@ -1,298 +1,195 @@
-# Modular Architecture
+# Source Code Directory
 
-This directory contains the modular architecture implementation for the HSE Digital backend.
-
-## Quick Start
-
-### Using Modular Routes
-
-```javascript
-// Option 1: Import from modules (recommended for new code)
-import { authRoutes } from './src/modules/auth/index.js';
-import { auditRoutes } from './src/modules/audit/index.js';
-import { incidentRoutes } from './src/modules/incident/index.js';
-
-app.use('/api/auth', authRoutes);
-app.use('/api/audits', auditRoutes);
-app.use('/api/incidents', incidentRoutes);
-
-// Option 2: Continue using existing routes (during transition)
-import authRoutes from './routes/auth.js';
-import auditsRouter from './routes/audits.js';
-
-app.use('/api/auth', authRoutes);
-app.use('/api/audits', auditsRouter);
-```
-
-### Accessing Services
-
-```javascript
-// Import service from module
-import { authService } from './src/modules/auth/index.js';
-
-// Use service methods
-const hashedPassword = await authService.hashPassword('mypassword');
-const tokens = authService.generateTokens(user);
-```
+This directory contains all application source code, organized by architectural layer.
 
 ## Directory Structure
 
 ```
 server/src/
-├── modules/                    # Feature modules (domain-driven)
-│   ├── auth/                  # Authentication & authorization
-│   │   ├── routes/            # HTTP routes
-│   │   ├── services/          # Business logic
-│   │   ├── controllers/       # Request handlers
-│   │   ├── validators/        # Input validation
-│   │   └── index.js          # Module exports
-│   │
-│   ├── audit/                 # Safety audits
-│   ├── incident/              # Incident reporting
-│   ├── permit/                # Work permits
-│   ├── billing/               # Billing & subscriptions
-│   ├── reporting/             # Report generation
-│   ├── tenant/                # Multi-tenant management
-│   │
-│   └── shared/                # Shared utilities
-│       ├── middleware/        # Reusable middleware
-│       ├── utils/            # Helper functions
-│       └── config/           # Configuration
-│
-├── core/                      # Core infrastructure
-│   ├── database/             # Database client
-│   ├── monitoring/           # Logging, metrics, tracing
-│   └── jobs/                 # Background jobs
-│
-├── app.js                    # Express app (modular)
-├── MODULE_ARCHITECTURE.md    # Architecture documentation
-├── DEPENDENCY_RULES.md       # Dependency guidelines
-└── README.md                 # This file
+├── index.js                 # Application entry point
+├── api/                     # HTTP interface layer
+│   ├── routes/              # Express route handlers
+│   └── middleware/          # Request/response middleware
+├── core/                    # Business logic layer
+│   └── services/            # Domain services
+├── infrastructure/          # External systems layer
+│   ├── database/           # Prisma client & migrations
+│   ├── queue/              # Background jobs & queues
+│   ├── monitoring/         # Alerts & monitoring
+│   ├── config/             # Infrastructure configuration
+│   └── external/           # Third-party SDKs
+└── shared/                  # Shared utilities
+    ├── utils/              # Common utilities (logger, cache, etc.)
+    └── constants/          # Shared constants
 ```
 
-## Module Structure
+## Quick Reference
 
-Each feature module follows this pattern:
+### Directory Purpose
 
-```
-module-name/
-├── routes/
-│   └── index.js              # Route definitions
-├── services/
-│   └── *.service.js          # Business logic
-├── controllers/
-│   └── *.controller.js       # Request handlers
-├── validators/
-│   └── *.validator.js        # Zod schemas
-└── index.js                  # Public API
-```
+| Directory | Purpose | Example Files |
+|-----------|---------|---------------|
+| `api/routes/` | HTTP endpoint handlers | `auth.js`, `audits.js`, `incidents.js` |
+| `api/middleware/` | Request/response middleware | `auth.js`, `rbac.js`, `validation.js` |
+| `core/services/` | Business logic | `authService.js`, `reportService.js` |
+| `infrastructure/database/` | Database client & migrations | `db.js` (via shared/utils), `prisma/` |
+| `infrastructure/queue/` | Background jobs | `jobs/emailProcessor.js`, `queues/` |
+| `infrastructure/monitoring/` | Alerts & metrics | `alerts.js` |
+| `infrastructure/config/` | Infrastructure config | `socket.js`, `multiRegion.js` |
+| `shared/utils/` | Common utilities | `logger.js`, `cache.js`, `metrics.js` |
+| `shared/constants/` | Shared constants | (future use) |
 
-## Creating a New Module
+### Import Patterns
 
-1. **Create directory structure:**
-```bash
-mkdir -p server/src/modules/mymodule/{routes,services,controllers,validators}
-```
-
-2. **Create validator** (`validators/mymodule.validator.js`):
+#### From Route Files (`api/routes/*.js`)
 ```javascript
-import { z } from 'zod';
+// Middleware (same level)
+import { authenticate } from '../middleware/auth.js';
 
-export const myModuleValidator = {
-  create: z.object({
-    name: z.string().min(1),
-    description: z.string()
-  }),
-  
-  update: z.object({
-    name: z.string().optional(),
-    description: z.string().optional()
-  })
-};
+// Services (core layer)
+import { authService } from '../../core/services/authService.js';
+
+// Utils (shared layer)
+import { prisma } from '../../shared/utils/db.js';
+import { logger } from '../../shared/utils/logger.js';
 ```
 
-3. **Create service** (`services/mymodule.service.js`):
+#### From Middleware Files (`api/middleware/*.js`)
 ```javascript
-export const myModuleService = {
-  async create(prisma, tenantId, data) {
-    return await prisma.myModel.create({
-      data: { ...data, organizationId: tenantId }
-    });
-  },
-  
-  async list(prisma, tenantId) {
-    return await prisma.myModel.findMany({
-      where: { organizationId: tenantId }
-    });
-  }
-};
+// Utils (shared layer)
+import { prisma } from '../../shared/utils/db.js';
+import { logger } from '../../shared/utils/logger.js';
+import { cache } from '../../shared/utils/cache.js';
+
+// Services (if needed)
+import { quotaService } from '../../core/services/quotaService.js';
 ```
 
-4. **Create controller** (`controllers/mymodule.controller.js`):
+#### From Service Files (`core/services/*.js`)
 ```javascript
-import { myModuleService } from '../services/mymodule.service.js';
+// Utils (shared layer)
+import { prisma } from '../../shared/utils/db.js';
+import { logger } from '../../shared/utils/logger.js';
 
-export const myModuleController = {
-  async create(req, res, next) {
-    try {
-      const result = await myModuleService.create(
-        req.prisma,
-        req.tenantId,
-        req.body
-      );
-      res.status(201).json(result);
-    } catch (error) {
-      next(error);
-    }
-  },
-  
-  async list(req, res, next) {
-    try {
-      const results = await myModuleService.list(
-        req.prisma,
-        req.tenantId
-      );
-      res.json(results);
-    } catch (error) {
-      next(error);
-    }
-  }
-};
+// Other services (same level)
+import { emailService } from './emailService.js';
+
+// Infrastructure
+import { queueService } from '../../infrastructure/queue/queues/index.js';
 ```
 
-5. **Create routes** (`routes/index.js`):
+#### From Job Processors (`infrastructure/queue/jobs/*.js`)
 ```javascript
-import express from 'express';
-import { myModuleController } from '../controllers/mymodule.controller.js';
-import { myModuleValidator } from '../validators/mymodule.validator.js';
-import { authenticateToken, tenantContext } from '../../shared/middleware/auth.js';
-import { validateRequest } from '../../shared/middleware/validation.js';
-import { prismaMiddleware } from '../../shared/middleware/prisma.js';
+// Services
+import { emailService } from '../../../core/services/emailService.js';
 
-const router = express.Router();
+// Utils
+import { logger } from '../../../shared/utils/logger.js';
 
-router.use(prismaMiddleware);
-router.use(authenticateToken);
-router.use(tenantContext);
-
-router.get('/', myModuleController.list);
-router.post('/', validateRequest(myModuleValidator.create), myModuleController.create);
-
-export default router;
+// Queues (sibling directory)
+import { emailQueue } from '../queues/index.js';
 ```
 
-6. **Create index** (`index.js`):
+### Key Principles
+
+1. **Single Database Client**: Always import Prisma from `shared/utils/db.js`
+   ```javascript
+   import { prisma } from '../../shared/utils/db.js';
+   ```
+
+2. **Layer Isolation**: 
+   - Routes → only call services
+   - Services → only use utils and infrastructure
+   - Utils → no dependencies on other layers
+
+3. **Barrel Exports**: Use index.js files for cleaner imports
+   ```javascript
+   // Multiple imports
+   import { logger } from '../../shared/utils/logger.js';
+   import { cache } from '../../shared/utils/cache.js';
+   
+   // Or via barrel (if all from same module)
+   import { logger, cache } from '../../shared/utils/index.js';
+   ```
+
+### Adding New Code
+
+#### New Route
+1. Create file in `api/routes/`
+2. Import middleware, services, utils
+3. Define Express router
+4. Export router
+5. Register in `index.js`
+
+#### New Service  
+1. Create file in `core/services/`
+2. Import utils and infrastructure
+3. Define business logic functions
+4. Export functions
+
+#### New Middleware
+1. Create file in `api/middleware/`
+2. Import utils as needed
+3. Define middleware function
+4. Export function
+
+#### New Utility
+1. Create file in `shared/utils/`
+2. Define utility functions
+3. Export functions
+4. (Optional) Add to `shared/utils/index.js`
+
+### File Counts
+
+- **Routes**: 19 files
+- **Middleware**: 20 files
+- **Services**: 24 files
+- **Utils**: 13 files
+- **Tests**: 21 files
+- **Total JS files**: 129 files
+
+### Documentation
+
+- **Architecture Details**: `../ARCHITECTURE.md`
+- **Migration Guide**: `../RESTRUCTURE_MIGRATION.md`
+- **Summary**: `../RESTRUCTURE_SUMMARY.md`
+- **Agent Guide**: `../../AGENTS.md`
+
+### Common Tasks
+
+**Add a new API endpoint:**
+1. Create/edit route file in `api/routes/`
+2. Import service from `core/services/`
+3. Register route in `index.js`
+
+**Add business logic:**
+1. Create/edit service in `core/services/`
+2. Use Prisma client from `shared/utils/db.js`
+3. Call from route handler
+
+**Add a background job:**
+1. Create processor in `infrastructure/queue/jobs/`
+2. Register in `infrastructure/queue/jobs/index.js`
+3. Trigger from service layer
+
+**Access database:**
 ```javascript
-export { default as myModuleRoutes } from './routes/index.js';
-export { myModuleService } from './services/mymodule.service.js';
-export { myModuleController } from './controllers/mymodule.controller.js';
-export { myModuleValidator } from './validators/mymodule.validator.js';
+import { prisma } from '../../shared/utils/db.js';
+
+const users = await prisma.user.findMany();
 ```
 
-7. **Register in app:**
-```javascript
-import { myModuleRoutes } from './src/modules/mymodule/index.js';
-app.use('/api/mymodule', myModuleRoutes);
-```
+### Need Help?
 
-## Available Shared Utilities
+See `../RESTRUCTURE_MIGRATION.md` for detailed migration guide and troubleshooting.
 
-### Middleware
-```javascript
-import { authenticateToken, tenantContext } from '../../shared/middleware/auth.js';
-import { requirePermission, requireRole } from '../../shared/middleware/rbac.js';
-import { validateRequest, validateParams, validateQuery } from '../../shared/middleware/validation.js';
-import { tenantCacheMiddleware, invalidateTenantCacheMiddleware } from '../../shared/middleware/caching.js';
-import { requireQuota, trackUsage } from '../../shared/middleware/quota.js';
-import { auditLog, captureOriginalEntity } from '../../shared/middleware/auditLog.js';
-import { authRateLimit, userRateLimit, tenantRateLimit } from '../../shared/middleware/rateLimitRedis.js';
-```
+---
 
-### Utilities
-```javascript
-import { buildCursorPagination, formatCursorResponse } from '../../shared/utils/pagination.js';
-import { emailService } from '../../shared/utils/email.js';
-import { notificationService } from '../../shared/utils/notification.js';
-```
+## Modular Architecture (Alternative Pattern)
 
-### Database
-```javascript
-import prisma from '../../core/database/client.js';
-```
+The codebase also supports a module-based architecture pattern. For details, see:
+- Module structure documentation in existing modules
+- Module architecture guides in the modules directory
+- Examples in the auth and audit modules
 
-## Migration Strategy
-
-The codebase is in transition from monolithic to modular architecture:
-
-### Phase 1: New Code (✅ Active)
-- All **new features** should use the modular structure
-- Create modules in `server/src/modules/`
-- Follow the module pattern
-
-### Phase 2: Gradual Migration (🔄 Ongoing)
-- Migrate existing features **as needed**
-- Start with high-value modules (auth, audit, incident)
-- Keep backward compatibility during transition
-
-### Phase 3: Complete Migration (⏳ Future)
-- All code moved to modules
-- Remove old routes directory
-- Update all imports
-
-### Using Both Systems
-
-During transition, you can use both:
-
-```javascript
-// New modular approach
-import { auditRoutes } from './src/modules/audit/index.js';
-app.use('/api/audits', auditRoutes);
-
-// Old approach (still works)
-import incidentsRouter from './routes/incidents.js';
-app.use('/api/incidents', incidentsRouter);
-```
-
-## Testing
-
-Test modules in isolation:
-
-```javascript
-// test/modules/audit/audit.service.test.js
-import { auditService } from '../../../src/modules/audit/index.js';
-import { createMockPrisma } from '../../mocks/prisma.js';
-
-describe('AuditService', () => {
-  const mockPrisma = createMockPrisma();
-  
-  test('creates audit', async () => {
-    const result = await auditService.createAudit(
-      mockPrisma,
-      'tenant-1',
-      { stationId: 'station-1', auditorId: 'user-1' }
-    );
-    
-    expect(result).toBeDefined();
-  });
-});
-```
-
-## Best Practices
-
-1. **Keep controllers thin** - Business logic belongs in services
-2. **Validate early** - Use validators on all inputs
-3. **Single responsibility** - One service per domain concept
-4. **Dependency injection** - Pass dependencies explicitly
-5. **Error handling** - Use try/catch in controllers, throw in services
-6. **Types** - Use JSDoc for better IDE support
-
-## Documentation
-
-- [MODULE_ARCHITECTURE.md](./MODULE_ARCHITECTURE.md) - Detailed architecture guide
-- [DEPENDENCY_RULES.md](./DEPENDENCY_RULES.md) - Dependency guidelines and rules
-
-## Questions?
-
-- Check existing modules for examples
-- Review documentation files
-- Follow the patterns established in auth and audit modules
+Both patterns coexist during the migration phase. New features can choose either approach based on team preference and feature requirements.

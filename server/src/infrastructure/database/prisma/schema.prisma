@@ -1,0 +1,407 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== RBAC MODELS ====================
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  permissions RolePermission[]
+  userRoles   UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  resource    String
+  action      String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  roles RolePermission[]
+
+  @@unique([resource, action])
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String   @id @default(cuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+// ==================== EXISTING MODELS ====================
+
+model Organization {
+  id                   String    @id @default(cuid())
+  name                 String
+  subdomain            String?   @unique
+  slug                 String?   @unique
+  ownerId              String
+  subscriptionPlan     String    @default("free")
+  subscriptionStatus   String    @default("active")
+  ssoConfig            Json?
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  monthlyRevenue       Float     @default(0)
+  lastActivityAt       DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  users           User[]
+  stations        Station[]
+  contractors     Contractor[]
+  audits          Audit[]
+  forms           FormDefinition[]
+  incidents       Incident[]
+  workPermits     WorkPermit[]
+  reports         Report[]
+  reportTemplates ReportTemplate[]
+  reportSchedules ReportSchedule[]
+
+  @@map("organizations")
+}
+
+model User {
+  id                       String    @id @default(cuid())
+  email                    String    @unique
+  name                     String
+  password                 String
+  role                     String
+  organizationId           String?
+  region                   String?
+  assignedStationIds       String[]  @default([])
+  contractorId             String?
+  isEmailVerified          Boolean   @default(false)
+  emailVerificationToken   String?
+  emailVerificationExpires DateTime?
+  passwordResetToken       String?
+  passwordResetExpires     DateTime?
+  refreshTokens            String?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  audits       Audit[]
+  incidents    Incident[]
+  workPermits  WorkPermit[]
+  userRoles    UserRole[]
+
+  @@index([organizationId])
+  @@map("users")
+}
+
+model Station {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  brand          String?
+  region         String?
+  address        String?
+  location       Json?
+  riskCategory   String   @default("Low")
+  auditFrequency String   @default("Annually")
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  audits       Audit[]
+  incidents    Incident[]
+  workPermits  WorkPermit[]
+
+  @@index([organizationId])
+  @@map("stations")
+}
+
+model Contractor {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  licenseNumber  String?
+  specialization String?
+  contactPerson  String?
+  email          String?
+  status         String   @default("Active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("contractors")
+}
+
+model Audit {
+  id             String    @id @default(cuid())
+  organizationId String
+  stationId      String
+  auditorId      String
+  auditNumber    String    @unique
+  scheduledDate  DateTime
+  completedDate  DateTime?
+  status         String    @default("Scheduled")
+  formId         String
+  findings       Json      @default("[]")
+  overallScore   Float     @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  station      Station      @relation(fields: [stationId], references: [id])
+  auditor      User         @relation(fields: [auditorId], references: [id])
+
+  @@index([organizationId])
+  @@index([stationId])
+  @@index([auditorId])
+  @@map("audits")
+}
+
+model FormDefinition {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  frequency      String?
+  schema         Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("form_definitions")
+}
+
+model Incident {
+  id             String    @id @default(cuid())
+  organizationId String
+  stationId      String
+  reporterId     String
+  incidentType   String
+  severity       String
+  description    String
+  status         String    @default("Open")
+  reportedAt     DateTime  @default(now())
+  resolvedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  station      Station      @relation(fields: [stationId], references: [id])
+  reporter     User         @relation(fields: [reporterId], references: [id])
+
+  @@index([organizationId])
+  @@index([stationId])
+  @@index([reporterId])
+  @@map("incidents")
+}
+
+model WorkPermit {
+  id             String   @id @default(cuid())
+  organizationId String
+  stationId      String
+  requestedBy    String
+  permitType     String
+  description    String
+  status         String   @default("Pending")
+  validFrom      DateTime
+  validTo        DateTime
+  approvedBy     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  station      Station      @relation(fields: [stationId], references: [id])
+  requester    User         @relation(fields: [requestedBy], references: [id])
+
+  @@index([organizationId])
+  @@index([stationId])
+  @@index([requestedBy])
+  @@map("work_permits")
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  userId         String?
+  organizationId String?
+  action         String
+  resource       String
+  resourceId     String?
+  ipAddress      String
+  userAgent      String
+  status         Int
+  errorMessage   String?
+  metadata       Json     @default("{}")
+  entityType     String?
+  entityId       String?
+  changes        Json?
+  createdAt      DateTime @default(now())
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([action])
+  @@index([entityType])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Report {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  type           String
+  format         String    @default("pdf")
+  status         String    @default("pending")
+  filters        Json      @default("{}")
+  parameters     Json      @default("{}")
+  generatedBy    String?
+  scheduledAt    DateTime?
+  generatedAt    DateTime?
+  fileUrl        String?
+  fileKey        String?
+  fileSize       Int?
+  error          String?
+  metadata       Json      @default("{}")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([type])
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([createdAt])
+  @@map("reports")
+}
+
+model ReportTemplate {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  type           String
+  template       Json
+  isDefault      Boolean  @default(false)
+  branding       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([type])
+  @@map("report_templates")
+}
+
+model ReportSchedule {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  reportType     String
+  cronExpression String
+  filters        Json      @default("{}")
+  parameters     Json      @default("{}")
+  recipients     String[]
+  isActive       Boolean   @default(true)
+  lastRunAt      DateTime?
+  nextRunAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([isActive])
+  @@index([nextRunAt])
+  @@map("report_schedules")
+}
+
+model AnalyticsSnapshot {
+  id             String   @id @default(cuid())
+  organizationId String
+  snapshotDate   DateTime
+  metrics        Json
+  kpis           Json
+  trends         Json
+  predictions    Json?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([snapshotDate])
+  @@map("analytics_snapshots")
+}
+
+model DashboardWidget {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  widgetType     String
+  title          String
+  config         Json
+  position       Json
+  isVisible      Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([userId])
+  @@map("dashboard_widgets")
+}
+
+model MaintenanceAlert {
+  id             String    @id @default(cuid())
+  organizationId String
+  stationId      String
+  alertType      String
+  priority       String
+  message        String
+  predictedDate  DateTime?
+  confidence     Float?
+  isResolved     Boolean   @default(false)
+  resolvedAt     DateTime?
+  metadata       Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([organizationId])
+  @@index([stationId])
+  @@index([isResolved])
+  @@map("maintenance_alerts")
+}

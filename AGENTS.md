@@ -88,11 +88,19 @@ npm run docker:ps          # List containers
 ## Architecture
 - **Structure:** Multi-tenant SaaS with organization-based isolation
 - **Pattern:** REST API with middleware-based request processing
+- **Code Organization:** Modular structure with separation of concerns
+  - `src/api/` - HTTP routes and middleware
+  - `src/core/` - Business logic services
+  - `src/infrastructure/` - External integrations (database, queue, monitoring)
+  - `src/shared/` - Utilities and constants
 - **Database:** Relational with RBAC (Role-Based Access Control)
+  - Single source of truth for Prisma client: `src/shared/utils/db.js`
 - **Caching:** Redis for rate limiting and session management
 - **Background Jobs:** Bull queue system for async processing (emails, reports, exports, webhooks, tenant onboarding)
 - **File Storage:** Local filesystem with volume mounts (Docker)
 - **Multi-stage Docker:** Optimized production builds
+
+**See:** `server/ARCHITECTURE.md` for detailed structure documentation
 
 ## Services
 - **app:** Node.js backend + frontend (port 3001)
@@ -183,7 +191,7 @@ Advanced PDF report generation with chart visualization, tenant branding, and sc
 
 **Test:**
 ```bash
-cd server && node tests/report-generation.test.js
+cd server && node src/tests/report-generation.test.js
 ```
 
 ### WebSocket Notifications
@@ -232,6 +240,35 @@ Full observability with Prometheus, Sentry, OpenTelemetry, and Grafana.
 4. Implement features following existing patterns
 5. Test using `docker-compose exec app npm test`
 6. Update documentation as needed
+
+## Backend Structure
+
+The backend follows a modular architecture with clear separation of concerns:
+
+```
+server/src/
+├── index.js                 # Application entry point
+├── api/                     # HTTP interface layer
+│   ├── routes/              # Express route handlers
+│   └── middleware/          # Request/response middleware
+├── core/                    # Business logic layer
+│   └── services/            # Domain services
+├── infrastructure/          # External systems layer
+│   ├── database/           # Prisma client & migrations
+│   ├── queue/              # Background jobs & queues
+│   ├── monitoring/         # Alerts & monitoring
+│   ├── config/             # Infrastructure configuration
+│   └── external/           # Third-party SDKs
+└── shared/                  # Shared utilities
+    ├── utils/              # Common utilities (logger, cache, etc.)
+    └── constants/          # Shared constants
+```
+
+**Key Principle:** All database access goes through `src/shared/utils/db.js` (single source of truth for Prisma client).
+
+**Documentation:**
+- Architecture details: `server/ARCHITECTURE.md`
+- Migration guide: `server/RESTRUCTURE_MIGRATION.md`
 
 ## Additional Resources
 

@@ -1,0 +1,603 @@
+
+import express from 'express';
+import cors from 'cors';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import dotenv from 'dotenv';
+import jwt from 'jsonwebtoken';
+import helmet from 'helmet';
+import compression from 'compression';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { exec } from 'child_process';
+import cookieParser from 'cookie-parser';
+import { requirePermission, requireRole, getUserPermissions, getUserRoles } from './api/middleware/rbac.js';
+import { securityHeaders, additionalSecurityHeaders } from './api/middleware/security.js';
+import { sanitizeRequest } from './api/middleware/sanitization.js';
+import { csrfProtection, generateCSRFMiddleware } from './api/middleware/csrf.js';
+import { auditLogger, auditLog, captureOriginalEntity } from './api/middleware/auditLog.js';
+import { tenantRateLimit, userRateLimit, ipRateLimit, authRateLimit } from './api/middleware/rateLimitRedis.js';
+import { 
+    validateRequest, 
+    validateParams, 
+    validateQuery,
+    stationSchema,
+    auditSchema,
+    incidentSchema,
+    workPermitSchema,
+    contractorSchema,
+    organizationSchema,
+    userUpdateSchema,
+    aiPromptSchema,
+    idParamSchema
+} from './api/middleware/validation.js';
+import authRoutes from './api/routes/auth.js';
+import auditLogsRouter from './api/routes/auditLogs.js';
+import auditsRouter from './api/routes/audits.js';
+import incidentsRouter from './api/routes/incidents.js';
+import organizationsRouter from './api/routes/organizations.js';
+import { startAuditLogCleanupScheduler } from './core/services/auditLogCleanup.js';
+import { requireQuota, trackUsage, requireFeature } from './api/middleware/quota.js';
+import { getUsageStats } from './core/services/quotaService.js';
+import billingRoutes from './api/routes/billing.js';
+import webhookRoutes from './api/routes/webhooks.js';
+import healthRoutes from './api/routes/health.js';
+import metricsRoutes from './api/routes/metrics.js';
+import { logger } from './shared/utils/logger.js';
+import { initSentry, sentryRequestHandler, sentryTracingHandler, sentryErrorHandler } from './shared/utils/sentry.js';
+import { httpLogger } from './api/middleware/logging.js';
+import { metricsMiddleware } from './api/middleware/metrics.js';
+import { sentryContextMiddleware, sentryPerformanceMiddleware } from './api/middleware/sentry.js';
+import { tracingMiddleware, enrichTracingContext, addTenantTierToSpan } from './api/middleware/tracing.js';
+import prisma from './shared/utils/db.js';
+import { alertManager } from './infrastructure/monitoring/alerts.js';
+import { advancedAlertingService } from './core/services/alertingService.js';
+import backupRoutes from './api/routes/backup.js';
+import { generateAIContent } from './core/services/tracedAiService.js';
+import alertingRoutes from './api/routes/alerting.js';
+import notificationsRouter from './api/routes/notifications.js';
+import mobileRouter from './api/routes/mobile.js';
+import analyticsRouter from './api/routes/analytics.js';
+import multiRegionRouter from './api/routes/multiRegion.js';
+import tenantMigrationRoutes from './api/routes/tenantMigration.js';
+import { initializeSocketIO } from './infrastructure/config/socket.js';
+import { setSocketIO } from './core/services/notificationService.js';
+import { createServer } from 'http';
+import reportsRoutes from './api/routes/reports.js';
+import { reportScheduler } from './core/services/reportScheduler.js';
+import jobsRoutes from './api/routes/jobs.js';
+import { startAllProcessors } from './infrastructure/queue/jobs/index.js';
+import { geoLocationMiddleware, tenantRegionRouting, cdnHeadersMiddleware, geoRoutingHeaders } from './api/middleware/geoRouting.js';
+import { replicaManager } from './shared/utils/databaseReplicaManager.js';
+import { redisClusterManager } from './shared/utils/redisClusterManager.js';
+import { failoverManager } from './core/services/failoverManager.js';
+
+dotenv.config();
+
+function validateRequiredEnvVars() {
+    const required = ['JWT_SECRET', 'REFRESH_SECRET'];
+    const missing = required.filter(key => !process.env[key]);
+    
+    if (missing.length > 0) {
+        console.error(`❌ FATAL: Missing required environment variables: ${missing.join(', ')}`);
+        console.error('Please configure these variables in your .env file before starting the server.');
+        process.exit(1);
+    }
+}
+
+validateRequiredEnvVars();
+
+import { initializeTracing } from './shared/utils/tracing.js';
+initializeTracing();
+
+startAllProcessors();
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+const JWT_SECRET = process.env.JWT_SECRET;
+const REFRESH_SECRET = process.env.REFRESH_SECRET;
+
+// Setup __dirname for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Ensure uploads directory exists
+const uploadDir = path.join(__dirname, 'public/uploads');
+if (!fs.existsSync(uploadDir)){
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Ensure reports directory exists
+const reportsDir = path.join(__dirname, 'public/reports');
+if (!fs.existsSync(reportsDir)){
+    fs.mkdirSync(reportsDir, { recursive: true });
+}
+
+initSentry(app);
+
+app.use(sentryRequestHandler());
+app.use(sentryTracingHandler());
+
+app.use(securityHeaders());
+app.use(additionalSecurityHeaders);
+
+app.use(compression());
+
+app.use(httpLogger);
+
+app.use(metricsMiddleware);
+
+app.use(tracingMiddleware);
+
+app.use(cookieParser());
+
+app.use(cors({
+    origin: process.env.CORS_ORIGIN || '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-tenant-id', 'x-csrf-token', 'x-session-id', 'x-trace-id', 'x-span-id', 'traceparent', 'tracestate'],
+    credentials: true,
+    exposedHeaders: ['x-trace-id', 'x-span-id']
+}));
+
+app.use('/api/webhooks', webhookRoutes);
+
+app.use(express.json({ limit: '10mb' }));
+
+app.use(sanitizeRequest());
+
+app.use(generateCSRFMiddleware());
+
+app.use('/api/', csrfProtection());
+
+app.use('/api/', ipRateLimit);
+
+app.use(auditLogger());
+
+app.use(sentryContextMiddleware);
+app.use(sentryPerformanceMiddleware);
+
+app.use(enrichTracingContext);
+
+app.use(geoLocationMiddleware);
+app.use(cdnHeadersMiddleware);
+app.use(geoRoutingHeaders);
+
+app.use('/uploads', express.static(uploadDir));
+app.use('/reports', express.static(reportsDir));
+
+logger.info('Initialized shared Prisma client singleton');
+
+// Initialize AI Client
+const ai = new GoogleGenerativeAI(process.env.API_KEY);
+
+// File Storage Config (Multer)
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir)
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
+    cb(null, uniqueSuffix + path.extname(file.originalname))
+  }
+});
+
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype.startsWith('image/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only image files are allowed!'));
+        }
+    }
+});
+
+
+
+// --- Helper: Generate Tokens ---
+const generateTokens = (user) => {
+    const payload = { 
+        id: user.id, 
+        email: user.email, 
+        role: user.role,
+        organizationId: user.organizationId 
+    };
+
+    const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
+    const refreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, { expiresIn: '7d' });
+    return { accessToken, refreshToken };
+};
+
+// --- Middleware: Auth Guard ---
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (!token) return res.sendStatus(401);
+
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) return res.sendStatus(403);
+        req.user = user;
+        next();
+    });
+};
+
+// --- Middleware: Tenant Context ---
+const tenantContext = async (req, res, next) => {
+    const user = req.user;
+    if (!user) return res.status(401).json({ error: 'Authentication required.' });
+
+    if (user.role === 'Admin' && !user.organizationId) {
+        req.tenantId = req.headers['x-tenant-id'] || null;
+        return next();
+    }
+    if (!user.organizationId) {
+        return res.status(403).json({ error: 'Access Denied: No Organization Context' });
+    }
+    req.tenantId = user.organizationId;
+    next();
+};
+
+const tenantContextWithTracing = [tenantContext, addTenantTierToSpan(prisma)];
+
+// --- Helper: Async Error Wrapper ---
+const asyncHandler = (fn) => (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+};
+
+// --- Monitoring Routes (no auth) ---
+app.use('/api', healthRoutes);
+app.use('/', metricsRoutes);
+
+// --- REST API Routes ---
+
+// BACKUP ROUTES
+app.use('/api/backup', authenticateToken, requireRole('Admin'), backupRoutes);
+
+// ALERTING ROUTES
+app.use('/api/alerting', authenticateToken, alertingRoutes);
+
+// NOTIFICATION ROUTES
+app.use('/api/notifications', notificationsRouter);
+
+// MOBILE API ROUTES
+app.use('/api/mobile', mobileRouter);
+
+// ANALYTICS ROUTES
+app.use('/api/analytics', analyticsRouter);
+
+// JOBS ROUTES
+app.use('/api/jobs', authenticateToken, tenantContext, jobsRoutes);
+
+// MULTI-REGION ROUTES
+app.use('/api/regions', multiRegionRouter);
+
+// TENANT MIGRATION ROUTES
+app.use('/api/tenant-migration', authenticateToken, requireRole('Admin'), tenantMigrationRoutes);
+
+// FILE UPLOAD
+app.post('/api/upload', authenticateToken, userRateLimit, upload.single('file'), asyncHandler(async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded.' });
+    }
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.get('host');
+    const fileUrl = `${protocol}://${host}/uploads/${req.file.filename}`;
+    res.json({ url: fileUrl, filename: req.file.filename });
+}));
+
+// AUTH ROUTES
+app.use('/api/auth', authRateLimit, authRoutes);
+
+// ADMIN SEED
+app.post('/api/admin/seed', authenticateToken, requireRole('Admin'), asyncHandler(async (req, res) => {
+    exec('node prisma/seed.js', (error, stdout, stderr) => {
+        if (error) {
+            console.error(`exec error: ${error}`);
+            return res.status(500).json({ error: 'Seed failed', details: stderr });
+        }
+        res.json({ message: "Seeded successfully.", logs: stdout });
+    });
+}));
+
+// --- RBAC MANAGEMENT ---
+app.get('/api/rbac/permissions/me', authenticateToken, userRateLimit, asyncHandler(async (req, res) => {
+    const permissions = await getUserPermissions(req.user.id);
+    res.json(permissions);
+}));
+
+app.get('/api/rbac/roles/me', authenticateToken, userRateLimit, asyncHandler(async (req, res) => {
+    const roles = await getUserRoles(req.user.id);
+    res.json(roles);
+}));
+
+// --- USAGE ENDPOINT ---
+app.get('/api/usage/current', authenticateToken, ...tenantContextWithTracing, asyncHandler(async (req, res) => {
+    const stats = await getUsageStats(req.tenantId);
+    if (!stats) {
+        return res.status(404).json({ error: 'Organization not found' });
+    }
+    res.json(stats);
+}));
+
+// --- BILLING ---
+app.use('/api/billing', authenticateToken, ...tenantContextWithTracing, billingRoutes);
+
+// --- ORGANIZATIONS ---
+app.use('/api/organizations', organizationsRouter);
+
+// --- STATIONS ---
+app.get('/api/stations', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('stations', 'read'), asyncHandler(async (req, res) => {
+    const where = {};
+    if (req.tenantId) where.organizationId = req.tenantId;
+    if (req.query.region) where.region = req.query.region;
+    const stations = await prisma.station.findMany({ where, orderBy: { name: 'asc' } });
+    res.json(stations);
+}));
+
+app.post('/api/stations', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('stations', 'write'), validateRequest(stationSchema), requireQuota('stations'), asyncHandler(async (req, res) => {
+    const station = await prisma.station.create({
+        data: {
+            ...req.validatedData,
+            organizationId: req.tenantId
+        }
+    });
+    res.status(201).json(station);
+}));
+
+app.put('/api/stations/:id', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('stations', 'write'), validateParams(idParamSchema), validateRequest(stationSchema.partial()), asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    await prisma.station.updateMany({
+        where: { id, organizationId: req.tenantId },
+        data: req.validatedData
+    });
+    const updated = await prisma.station.findUnique({ where: { id } });
+    res.json(updated);
+}));
+
+app.delete('/api/stations/:id', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('stations', 'delete'), validateParams(idParamSchema), asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    await prisma.station.deleteMany({
+        where: { id, organizationId: req.tenantId }
+    });
+    res.json({ message: 'Station deleted' });
+}));
+
+// --- AUDITS ---
+app.use('/api/audits', auditsRouter);
+
+// --- INCIDENTS ---
+app.use('/api/incidents', incidentsRouter);
+
+// --- WORK PERMITS ---
+app.get('/api/work-permits', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('workPermits', 'read'), asyncHandler(async (req, res) => {
+    const where = { organizationId: req.tenantId };
+    if (req.query.stationId) where.stationId = req.query.stationId;
+    const permits = await prisma.workPermit.findMany({
+        where,
+        orderBy: { createdAt: 'desc' }
+    });
+    res.json(permits);
+}));
+
+app.post('/api/work-permits', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('workPermits', 'write'), validateRequest(workPermitSchema), requireQuota('work_permits'), trackUsage('work_permits'), asyncHandler(async (req, res) => {
+    const permit = await prisma.workPermit.create({
+        data: {
+            organizationId: req.tenantId,
+            requestedBy: req.user.id,
+            ...req.validatedData,
+            validFrom: new Date(req.validatedData.validFrom),
+            validTo: new Date(req.validatedData.validTo)
+        }
+    });
+    res.status(201).json(permit);
+}));
+
+app.put('/api/work-permits/:id', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('workPermits', 'write'), validateParams(idParamSchema), validateRequest(workPermitSchema.partial()), asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const updateData = { ...req.validatedData };
+    if (updateData.validFrom) updateData.validFrom = new Date(updateData.validFrom);
+    if (updateData.validTo) updateData.validTo = new Date(updateData.validTo);
+    await prisma.workPermit.updateMany({
+        where: { id, organizationId: req.tenantId },
+        data: updateData
+    });
+    const updated = await prisma.workPermit.findUnique({ where: { id } });
+    res.json(updated);
+}));
+
+// --- CONTRACTORS ---
+app.get('/api/contractors', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('contractors', 'read'), asyncHandler(async (req, res) => {
+    const contractors = await prisma.contractor.findMany({
+        where: { organizationId: req.tenantId },
+        orderBy: { name: 'asc' }
+    });
+    res.json(contractors);
+}));
+
+app.post('/api/contractors', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('contractors', 'write'), validateRequest(contractorSchema), requireQuota('contractors'), asyncHandler(async (req, res) => {
+    const contractor = await prisma.contractor.create({
+        data: {
+            organizationId: req.tenantId,
+            ...req.validatedData
+        }
+    });
+    res.status(201).json(contractor);
+}));
+
+// --- USERS ---
+app.get('/api/users', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('users', 'read'), asyncHandler(async (req, res) => {
+    const where = { organizationId: req.tenantId };
+    const users = await prisma.user.findMany({ 
+        where,
+        select: { id: true, email: true, name: true, role: true, region: true, createdAt: true, updatedAt: true }
+    });
+    res.json(users);
+}));
+
+app.post('/api/users', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('users', 'write'), requireQuota('users'), asyncHandler(async (req, res) => {
+    const { email, name, password, role, region } = req.body;
+    const user = await prisma.user.create({
+        data: {
+            organizationId: req.tenantId,
+            email,
+            name,
+            password,
+            role: role || 'User',
+            region,
+            isEmailVerified: false
+        }
+    });
+    const { password: _, ...userInfo } = user;
+    res.status(201).json(userInfo);
+}));
+
+// --- AI ---
+app.post('/api/ai/generate', authenticateToken, ...tenantContextWithTracing, userRateLimit, validateRequest(aiPromptSchema), requireFeature('ai_assistant'), asyncHandler(async (req, res) => {
+    const { prompt } = req.validatedData;
+    try {
+        const result = await generateAIContent(prompt, { model: 'gemini-2.5-flash' });
+        res.json(result);
+    } catch (error) {
+        console.error("AI Service Error:", error);
+        res.status(502).json({ error: error.message || "AI Service unavailable" });
+    }
+}));
+
+// --- AUDIT LOGS ---
+app.use('/api/admin/audit-logs', auditLogsRouter);
+
+// --- REPORTS ---
+app.use('/api/reports', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, reportsRoutes);
+
+// --- Frontend Serving (Production) ---
+const frontendPath = path.join(__dirname, '../../dist');
+if (fs.existsSync(frontendPath)) {
+    app.use(express.static(frontendPath));
+    app.get('*', (req, res, next) => {
+        if (req.url.startsWith('/api') || req.url.startsWith('/uploads')) return next();
+        res.sendFile(path.join(frontendPath, 'index.html'));
+    });
+}
+
+// --- Sentry Error Handler ---
+app.use(sentryErrorHandler());
+
+// --- Global Error Handler ---
+app.use((err, req, res, next) => {
+    const errorContext = {
+        method: req.method,
+        url: req.url,
+        tenantId: req.tenantId,
+        userId: req.user?.id,
+        statusCode: err.statusCode || 500
+    };
+
+    logger.error({
+        err,
+        req: {
+            method: req.method,
+            url: req.url,
+            headers: req.headers,
+            body: req.body
+        },
+        tenantId: req.tenantId,
+        userId: req.user?.id
+    }, 'Unhandled error');
+
+    if (err.statusCode >= 500 || !err.statusCode) {
+        alertManager.criticalError(err, errorContext);
+        
+        advancedAlertingService.trackErrorRate(err).catch(e => 
+            logger.error({ error: e }, 'Failed to track error rate')
+        );
+    }
+
+    const statusCode = err.statusCode || 500;
+    res.status(statusCode).json({ error: err.message || 'Internal Server Error' });
+});
+
+// --- Startup ---
+const httpServer = createServer(app);
+const io = initializeSocketIO(httpServer);
+setSocketIO(io);
+
+const server = httpServer.listen(PORT, async () => {
+    logger.info({ port: PORT, env: process.env.NODE_ENV }, `🚀 Server running on http://localhost:${PORT}`);
+    logger.info('✅ Monitoring enabled: Logs (Pino), Metrics (Prometheus), Errors (Sentry), Alerts (Custom)');
+    logger.info('✅ WebSocket server initialized with Redis adapter for horizontal scaling');
+    
+    if (process.env.ENABLE_MULTI_REGION === 'true') {
+        try {
+            await replicaManager.initialize();
+            await redisClusterManager.initialize();
+            await failoverManager.initialize();
+            logger.info('✅ Multi-region architecture initialized');
+        } catch (error) {
+            logger.error({ error: error.message }, 'Failed to initialize multi-region components');
+        }
+    }
+    
+    startAuditLogCleanupScheduler();
+    
+    try {
+        await reportScheduler.init();
+        logger.info('✅ Report scheduler initialized');
+    } catch (error) {
+        logger.error({ error }, 'Failed to initialize report scheduler');
+    }
+});
+
+process.on('SIGTERM', async () => {
+    logger.info('SIGTERM received, shutting down gracefully');
+    reportScheduler.stopAll();
+    server.close(async () => {
+        logger.info('HTTP server closed');
+        
+        if (process.env.ENABLE_MULTI_REGION === 'true') {
+            await Promise.all([
+                replicaManager.disconnect(),
+                redisClusterManager.disconnect(),
+                failoverManager.shutdown(),
+            ]).catch(err => logger.error({ err }, 'Error during multi-region shutdown'));
+        }
+        
+        await prisma.$disconnect();
+        logger.info('Database connection closed');
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', async () => {
+    logger.info('SIGINT received, shutting down gracefully');
+    reportScheduler.stopAll();
+    server.close(async () => {
+        logger.info('HTTP server closed');
+        
+        if (process.env.ENABLE_MULTI_REGION === 'true') {
+            await Promise.all([
+                replicaManager.disconnect(),
+                redisClusterManager.disconnect(),
+                failoverManager.shutdown(),
+            ]).catch(err => logger.error({ err }, 'Error during multi-region shutdown'));
+        }
+        
+        await prisma.$disconnect();
+        logger.info('Database connection closed');
+        process.exit(0);
+    });
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    logger.error({ reason, promise }, 'Unhandled Promise Rejection');
+    alertManager.criticalError(new Error('Unhandled Promise Rejection'), { reason });
+    advancedAlertingService.trackErrorRate(reason instanceof Error ? reason : new Error('Unhandled Promise Rejection')).catch(() => {});
+});
+
+process.on('uncaughtException', (error) => {
+    logger.fatal({ error }, 'Uncaught Exception');
+    alertManager.criticalError(error, { type: 'uncaughtException' });
+    advancedAlertingService.trackErrorRate(error).catch(() => {});
+    process.exit(1);
+});

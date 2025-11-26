@@ -2,21 +2,21 @@
   "name": "hse-digital-backend",
   "version": "1.0.0",
   "description": "Enterprise Backend for HSE.Digital",
-  "main": "index.js",
+  "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js",
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
     "build": "echo 'Backend: No build step required for Node.js server'",
-    "lint": "node -c index.js && node -c utils/sentry.js && node -c middleware/sentry.js && echo '✓ Syntax check passed'",
+    "lint": "node -c src/index.js && node -c src/shared/utils/sentry.js && node -c src/api/middleware/sentry.js && echo '✓ Syntax check passed'",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:migrate:custom": "node prisma/run-migrations.js up",
     "prisma:rollback:custom": "node prisma/run-migrations.js down",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
-    "seed": "node prisma/seed.js",
-    "seed:rbac": "node prisma/seed-comprehensive.js",
+    "seed": "node src/infrastructure/database/prisma/seed.js",
+    "seed:rbac": "node src/infrastructure/database/prisma/seed-comprehensive.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:tenant": "node tests/tenant-isolation.unit.test.js",
     "test:tenant:integration": "node tests/tenant-isolation.test.js",
@@ -33,7 +33,7 @@
     "rls:test": "node test-rls-implementation.js"
   },
   "prisma": {
-    "seed": "node prisma/seed.js"
+    "seed": "node src/infrastructure/database/prisma/seed.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.705.0",
