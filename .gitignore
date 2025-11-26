@@ -45,3 +45,6 @@ sdks/python/**/__pycache__/
 *.pyc
 .pytest_cache/
 .mypy_cache/
+
+# Multi-region environment files
+.env.multiregion

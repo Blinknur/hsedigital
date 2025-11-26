@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: hse-digital
+
+bases:
+  - ../../base
+
+namePrefix: us-east-
+
+commonLabels:
+  region: us-east-1
+  environment: production
+
+configMapGenerator:
+  - name: region-config
+    literals:
+      - DEPLOYMENT_REGION=US_EAST
+      - DATABASE_URL_US_EAST_PRIMARY=postgresql://user:pass@us-east-primary-db:5432/hse_platform
+      - DATABASE_URL_US_EAST_REPLICA=postgresql://user:pass@us-east-replica-db:5432/hse_platform
+      - REDIS_CLUSTER_US_EAST=us-east-redis-1:6379,us-east-redis-2:6379,us-east-redis-3:6379
+      - CDN_ENDPOINT_US_EAST=https://cdn-us-east.hse.digital
+      - LB_ENDPOINT_US_EAST=https://us-east.hse.digital
+
+replicas:
+  - name: hse-app
+    count: 5

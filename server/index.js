@@ -59,6 +59,7 @@ import alertingRoutes from './routes/alerting.js';
 import notificationsRouter from './routes/notifications.js';
 import mobileRouter from './routes/mobile.js';
 import analyticsRouter from './routes/analytics.js';
+import multiRegionRouter from './routes/multiRegion.js';
 import { initializeSocketIO } from './config/socket.js';
 import { setSocketIO } from './services/notificationService.js';
 import { createServer } from 'http';
@@ -66,6 +67,10 @@ import reportsRoutes from './routes/reports.js';
 import { reportScheduler } from './services/reportScheduler.js';
 import jobsRoutes from './routes/jobs.js';
 import { startAllProcessors } from './jobs/index.js';
+import { geoLocationMiddleware, tenantRegionRouting, cdnHeadersMiddleware, geoRoutingHeaders } from './middleware/geoRouting.js';
+import { replicaManager } from './utils/databaseReplicaManager.js';
+import { redisClusterManager } from './utils/redisClusterManager.js';
+import { failoverManager } from './services/failoverManager.js';
 
 dotenv.config();
 
@@ -137,6 +142,10 @@ app.use(sentryContextMiddleware);
 app.use(sentryPerformanceMiddleware);
 
 app.use(enrichTracingContext);
+
+app.use(geoLocationMiddleware);
+app.use(cdnHeadersMiddleware);
+app.use(geoRoutingHeaders);
 
 app.use('/uploads', express.static(uploadDir));
 app.use('/reports', express.static(reportsDir));
@@ -244,6 +253,9 @@ app.use('/api/analytics', analyticsRouter);
 
 // JOBS ROUTES
 app.use('/api/jobs', authenticateToken, tenantContext, jobsRoutes);
+
+// MULTI-REGION ROUTES
+app.use('/api/regions', multiRegionRouter);
 
 // FILE UPLOAD
 app.post('/api/upload', authenticateToken, userRateLimit, upload.single('file'), asyncHandler(async (req, res) => {
@@ -506,6 +518,18 @@ const server = httpServer.listen(PORT, async () => {
     logger.info({ port: PORT, env: process.env.NODE_ENV }, `🚀 Server running on http://localhost:${PORT}`);
     logger.info('✅ Monitoring enabled: Logs (Pino), Metrics (Prometheus), Errors (Sentry), Alerts (Custom)');
     logger.info('✅ WebSocket server initialized with Redis adapter for horizontal scaling');
+    
+    if (process.env.ENABLE_MULTI_REGION === 'true') {
+        try {
+            await replicaManager.initialize();
+            await redisClusterManager.initialize();
+            await failoverManager.initialize();
+            logger.info('✅ Multi-region architecture initialized');
+        } catch (error) {
+            logger.error({ error: error.message }, 'Failed to initialize multi-region components');
+        }
+    }
+    
     startAuditLogCleanupScheduler();
     
     try {
@@ -516,27 +540,43 @@ const server = httpServer.listen(PORT, async () => {
     }
 });
 
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
     logger.info('SIGTERM received, shutting down gracefully');
     reportScheduler.stopAll();
-    server.close(() => {
+    server.close(async () => {
         logger.info('HTTP server closed');
-        prisma.$disconnect().then(() => {
-            logger.info('Database connection closed');
-            process.exit(0);
-        });
+        
+        if (process.env.ENABLE_MULTI_REGION === 'true') {
+            await Promise.all([
+                replicaManager.disconnect(),
+                redisClusterManager.disconnect(),
+                failoverManager.shutdown(),
+            ]).catch(err => logger.error({ err }, 'Error during multi-region shutdown'));
+        }
+        
+        await prisma.$disconnect();
+        logger.info('Database connection closed');
+        process.exit(0);
     });
 });
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
     logger.info('SIGINT received, shutting down gracefully');
     reportScheduler.stopAll();
-    server.close(() => {
+    server.close(async () => {
         logger.info('HTTP server closed');
-        prisma.$disconnect().then(() => {
-            logger.info('Database connection closed');
-            process.exit(0);
-        });
+        
+        if (process.env.ENABLE_MULTI_REGION === 'true') {
+            await Promise.all([
+                replicaManager.disconnect(),
+                redisClusterManager.disconnect(),
+                failoverManager.shutdown(),
+            ]).catch(err => logger.error({ err }, 'Error during multi-region shutdown'));
+        }
+        
+        await prisma.$disconnect();
+        logger.info('Database connection closed');
+        process.exit(0);
     });
 });
 

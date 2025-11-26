@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: hse-digital
+
+bases:
+  - ../../base
+
+namePrefix: eu-west-
+
+commonLabels:
+  region: eu-west-1
+  environment: production
+
+configMapGenerator:
+  - name: region-config
+    literals:
+      - DEPLOYMENT_REGION=EU_WEST
+      - DATABASE_URL_EU_WEST_PRIMARY=postgresql://user:pass@eu-west-primary-db:5432/hse_platform
+      - DATABASE_URL_EU_WEST_REPLICA=postgresql://user:pass@eu-west-replica-db:5432/hse_platform
+      - REDIS_CLUSTER_EU_WEST=eu-west-redis-1:6379,eu-west-redis-2:6379,eu-west-redis-3:6379
+      - CDN_ENDPOINT_EU_WEST=https://cdn-eu-west.hse.digital
+      - LB_ENDPOINT_EU_WEST=https://eu-west.hse.digital
+
+replicas:
+  - name: hse-app
+    count: 3

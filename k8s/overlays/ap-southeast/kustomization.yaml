@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: hse-digital
+
+bases:
+  - ../../base
+
+namePrefix: ap-southeast-
+
+commonLabels:
+  region: ap-southeast-1
+  environment: production
+
+configMapGenerator:
+  - name: region-config
+    literals:
+      - DEPLOYMENT_REGION=AP_SOUTHEAST
+      - DATABASE_URL_AP_SOUTHEAST_PRIMARY=postgresql://user:pass@ap-southeast-primary-db:5432/hse_platform
+      - DATABASE_URL_AP_SOUTHEAST_REPLICA=postgresql://user:pass@ap-southeast-replica-db:5432/hse_platform
+      - REDIS_CLUSTER_AP_SOUTHEAST=ap-southeast-redis-1:6379,ap-southeast-redis-2:6379,ap-southeast-redis-3:6379
+      - CDN_ENDPOINT_AP_SOUTHEAST=https://cdn-ap-southeast.hse.digital
+      - LB_ENDPOINT_AP_SOUTHEAST=https://ap-southeast.hse.digital
+
+replicas:
+  - name: hse-app
+    count: 3
