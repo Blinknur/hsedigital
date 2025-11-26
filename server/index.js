@@ -61,6 +61,8 @@ import mobileRouter from './routes/mobile.js';
 import { initializeSocketIO } from './config/socket.js';
 import { setSocketIO } from './services/notificationService.js';
 import { createServer } from 'http';
+import reportsRoutes from './routes/reports.js';
+import { reportScheduler } from './services/reportScheduler.js';
 
 dotenv.config();
 
@@ -80,6 +82,12 @@ const __dirname = path.dirname(__filename);
 const uploadDir = path.join(__dirname, 'public/uploads');
 if (!fs.existsSync(uploadDir)){
     fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Ensure reports directory exists
+const reportsDir = path.join(__dirname, 'public/reports');
+if (!fs.existsSync(reportsDir)){
+    fs.mkdirSync(reportsDir, { recursive: true });
 }
 
 initSentry(app);
@@ -126,6 +134,7 @@ app.use(sentryPerformanceMiddleware);
 app.use(enrichTracingContext);
 
 app.use('/uploads', express.static(uploadDir));
+app.use('/reports', express.static(reportsDir));
 
 logger.info('Initialized shared Prisma client singleton');
 
@@ -427,6 +436,9 @@ app.post('/api/ai/generate', authenticateToken, ...tenantContextWithTracing, use
 // --- AUDIT LOGS ---
 app.use('/api/admin/audit-logs', auditLogsRouter);
 
+// --- REPORTS ---
+app.use('/api/reports', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, reportsRoutes);
+
 // --- Frontend Serving (Production) ---
 const frontendPath = path.join(__dirname, '../dist');
 if (fs.existsSync(frontendPath)) {
@@ -479,15 +491,23 @@ const httpServer = createServer(app);
 const io = initializeSocketIO(httpServer);
 setSocketIO(io);
 
-const server = httpServer.listen(PORT, () => {
+const server = httpServer.listen(PORT, async () => {
     logger.info({ port: PORT, env: process.env.NODE_ENV }, `🚀 Server running on http://localhost:${PORT}`);
     logger.info('✅ Monitoring enabled: Logs (Pino), Metrics (Prometheus), Errors (Sentry), Alerts (Custom)');
     logger.info('✅ WebSocket server initialized with Redis adapter for horizontal scaling');
     startAuditLogCleanupScheduler();
+    
+    try {
+        await reportScheduler.init();
+        logger.info('✅ Report scheduler initialized');
+    } catch (error) {
+        logger.error({ error }, 'Failed to initialize report scheduler');
+    }
 });
 
 process.on('SIGTERM', () => {
     logger.info('SIGTERM received, shutting down gracefully');
+    reportScheduler.stopAll();
     server.close(() => {
         logger.info('HTTP server closed');
         prisma.$disconnect().then(() => {
@@ -499,6 +519,7 @@ process.on('SIGTERM', () => {
 
 process.on('SIGINT', () => {
     logger.info('SIGINT received, shutting down gracefully');
+    reportScheduler.stopAll();
     server.close(() => {
         logger.info('HTTP server closed');
         prisma.$disconnect().then(() => {

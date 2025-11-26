@@ -75,6 +75,7 @@ npm run docker:ps          # List containers
 - **Containerization:** Docker + Docker Compose
 - **Security:** Helmet, express-rate-limit, CORS
 - **Monitoring:** Pino (logging), Prometheus (metrics), Sentry (errors + performance), OpenTelemetry (tracing), Grafana (dashboards)
+- **Reports:** PDFKit (PDF generation), Puppeteer (chart rendering), AWS S3 (storage), Cron (scheduling)
 
 ## Architecture
 - **Structure:** Multi-tenant SaaS with organization-based isolation
@@ -100,3 +101,25 @@ npm run docker:ps          # List containers
 - Use ES6+ features and async/await
 - Middleware-based architecture for Express routes
 - Environment-based configuration
+
+## Features
+
+### Report Generation Engine
+Advanced PDF report generation with chart visualization, tenant branding, and scheduled delivery.
+
+**Documentation:**
+- Quick Start: `server/REPORTS_QUICK_START.md`
+- Full API Reference: `server/REPORTS_DOCUMENTATION.md`
+
+**Key Capabilities:**
+- PDF reports for audits, incidents, and compliance
+- Chart embedding (bar, line, pie, doughnut)
+- Custom tenant branding and templates
+- S3 or local filesystem storage
+- Scheduled reports via cron expressions
+- Email delivery to recipients
+
+**Test:**
+```bash
+cd server && node tests/report-generation.test.js
+```

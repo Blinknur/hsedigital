@@ -82,13 +82,16 @@ model Organization {
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
-  users       User[]
-  stations    Station[]
-  contractors Contractor[]
-  audits      Audit[]
-  forms       FormDefinition[]
-  incidents   Incident[]
-  workPermits WorkPermit[]
+  users            User[]
+  stations         Station[]
+  contractors      Contractor[]
+  audits           Audit[]
+  forms            FormDefinition[]
+  incidents        Incident[]
+  workPermits      WorkPermit[]
+  reports          Report[]
+  reportTemplates  ReportTemplate[]
+  reportSchedules  ReportSchedule[]
 
   @@map("organizations")
 }
@@ -274,4 +277,76 @@ model AuditLog {
   @@index([entityType])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+model Report {
+  id               String    @id @default(cuid())
+  organizationId   String
+  name             String
+  type             String
+  format           String    @default("pdf")
+  status           String    @default("pending")
+  filters          Json      @default("{}")
+  parameters       Json      @default("{}")
+  generatedBy      String?
+  scheduledAt      DateTime?
+  generatedAt      DateTime?
+  fileUrl          String?
+  fileKey          String?
+  fileSize         Int?
+  error            String?
+  metadata         Json      @default("{}")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([type])
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([createdAt])
+  @@map("reports")
+}
+
+model ReportTemplate {
+  id               String   @id @default(cuid())
+  organizationId   String
+  name             String
+  description      String?
+  type             String
+  template         Json
+  isDefault        Boolean  @default(false)
+  branding         Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([type])
+  @@map("report_templates")
+}
+
+model ReportSchedule {
+  id               String    @id @default(cuid())
+  organizationId   String
+  name             String
+  reportType       String
+  cronExpression   String
+  filters          Json      @default("{}")
+  parameters       Json      @default("{}")
+  recipients       String[]
+  isActive         Boolean   @default(true)
+  lastRunAt        DateTime?
+  nextRunAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([isActive])
+  @@index([nextRunAt])
+  @@map("report_schedules")
 }

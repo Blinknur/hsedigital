@@ -22,3 +22,11 @@ public/uploads/
 *_compressed.*
 *_thumbnail.*
 *_mobile.*
+
+# Generated reports
+server/public/reports/*.pdf
+!server/public/reports/.gitkeep
+
+# Puppeteer
+.local-chromium/
+*.crdownload
