@@ -1,7 +1,7 @@
 
 import express from 'express';
 import cors from 'cors';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import helmet from 'helmet';
@@ -129,7 +129,7 @@ app.use('/uploads', express.static(uploadDir));
 logger.info('Initialized shared Prisma client singleton');
 
 // Initialize AI Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenerativeAI(process.env.API_KEY);
 
 // File Storage Config (Multer)
 const storage = multer.diskStorage({
