@@ -79,6 +79,38 @@ export const idParamSchema = z.object({
     id: z.string().cuid()
 });
 
+export const tenantCloneSchema = z.object({
+    sourceTenantId: z.string().cuid(),
+    targetName: z.string().min(1).max(255),
+    includeUsers: z.boolean().default(false),
+    includeAudits: z.boolean().default(false),
+    includeAuditLogs: z.boolean().default(false),
+    ownerId: z.string().cuid().optional().nullable()
+});
+
+export const tenantImportSchema = z.object({
+    importData: z.object({
+        metadata: z.object({
+            version: z.string(),
+            exportedAt: z.string().optional(),
+            tenantId: z.string().optional(),
+            tenantName: z.string().optional()
+        }),
+        organization: z.object({
+            name: z.string().min(1).max(255),
+            ownerId: z.string().cuid(),
+            subscriptionPlan: z.string().optional(),
+            ssoConfig: z.any().optional()
+        }),
+        users: z.array(z.any()),
+        stations: z.array(z.any()),
+        contractors: z.array(z.any())
+    }),
+    targetTenantId: z.string().cuid().optional().nullable(),
+    createNew: z.boolean().default(false),
+    dryRun: z.boolean().default(false)
+});
+
 export const validateRequest = (schema) => {
     return (req, res, next) => {
         try {

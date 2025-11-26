@@ -48,3 +48,8 @@ sdks/python/**/__pycache__/
 
 # Multi-region environment files
 .env.multiregion
+
+# Tenant Migration Backups
+backups/
+server/backups/
+*.zip

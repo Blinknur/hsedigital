@@ -60,6 +60,7 @@ import notificationsRouter from './routes/notifications.js';
 import mobileRouter from './routes/mobile.js';
 import analyticsRouter from './routes/analytics.js';
 import multiRegionRouter from './routes/multiRegion.js';
+import tenantMigrationRoutes from './routes/tenantMigration.js';
 import { initializeSocketIO } from './config/socket.js';
 import { setSocketIO } from './services/notificationService.js';
 import { createServer } from 'http';
@@ -256,6 +257,9 @@ app.use('/api/jobs', authenticateToken, tenantContext, jobsRoutes);
 
 // MULTI-REGION ROUTES
 app.use('/api/regions', multiRegionRouter);
+
+// TENANT MIGRATION ROUTES
+app.use('/api/tenant-migration', authenticateToken, requireRole('Admin'), tenantMigrationRoutes);
 
 // FILE UPLOAD
 app.post('/api/upload', authenticateToken, userRateLimit, upload.single('file'), asyncHandler(async (req, res) => {
