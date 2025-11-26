@@ -30,3 +30,6 @@ server/public/reports/*.pdf
 # Puppeteer
 .local-chromium/
 *.crdownload
+
+# Queue system generated files
+server/public/exports/

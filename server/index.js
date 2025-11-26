@@ -63,11 +63,15 @@ import { setSocketIO } from './services/notificationService.js';
 import { createServer } from 'http';
 import reportsRoutes from './routes/reports.js';
 import { reportScheduler } from './services/reportScheduler.js';
+import jobsRoutes from './routes/jobs.js';
+import { startAllProcessors } from './jobs/index.js';
 
 dotenv.config();
 
 import { initializeTracing } from './utils/tracing.js';
 initializeTracing();
+
+startAllProcessors();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -233,6 +237,9 @@ app.use('/api/notifications', notificationsRouter);
 
 // MOBILE API ROUTES
 app.use('/api/mobile', mobileRouter);
+
+// JOBS ROUTES
+app.use('/api/jobs', authenticateToken, tenantContext, jobsRoutes);
 
 // FILE UPLOAD
 app.post('/api/upload', authenticateToken, userRateLimit, upload.single('file'), asyncHandler(async (req, res) => {

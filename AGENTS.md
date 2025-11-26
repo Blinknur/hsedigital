@@ -70,6 +70,7 @@ npm run docker:ps          # List containers
 - **Backend Framework:** Express.js
 - **Database:** PostgreSQL 15 (with Prisma ORM)
 - **Cache:** Redis 7
+- **Queue:** Bull (with Bull Board dashboard)
 - **Frontend:** React + Vite + TypeScript
 - **Authentication:** JWT
 - **Containerization:** Docker + Docker Compose
@@ -82,6 +83,7 @@ npm run docker:ps          # List containers
 - **Pattern:** REST API with middleware-based request processing
 - **Database:** Relational with RBAC (Role-Based Access Control)
 - **Caching:** Redis for rate limiting and session management
+- **Background Jobs:** Bull queue system for async processing (emails, reports, exports, webhooks, tenant onboarding)
 - **File Storage:** Local filesystem with volume mounts (Docker)
 - **Multi-stage Docker:** Optimized production builds
 
