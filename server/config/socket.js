@@ -4,7 +4,11 @@ import Redis from 'ioredis';
 import jwt from 'jsonwebtoken';
 import { logger } from '../utils/logger.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key-change-in-prod';
+if (!process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET environment variable must be configured');
+}
+
+const JWT_SECRET = process.env.JWT_SECRET;
 
 const pubClient = new Redis({
     host: process.env.REDIS_HOST || 'localhost',

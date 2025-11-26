@@ -9,6 +9,11 @@ npm install
 cd server && npm install
 cp .env.local .env
 
+# IMPORTANT: Configure required environment variables in .env:
+# - JWT_SECRET (required) - Secret key for JWT access tokens
+# - REFRESH_SECRET (required) - Secret key for JWT refresh tokens
+# The server will not start without these variables configured.
+
 # Docker setup (recommended)
 npm run docker:up
 docker-compose exec app npx prisma db push

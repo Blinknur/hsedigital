@@ -75,6 +75,19 @@ import { failoverManager } from './services/failoverManager.js';
 
 dotenv.config();
 
+function validateRequiredEnvVars() {
+    const required = ['JWT_SECRET', 'REFRESH_SECRET'];
+    const missing = required.filter(key => !process.env[key]);
+    
+    if (missing.length > 0) {
+        console.error(`❌ FATAL: Missing required environment variables: ${missing.join(', ')}`);
+        console.error('Please configure these variables in your .env file before starting the server.');
+        process.exit(1);
+    }
+}
+
+validateRequiredEnvVars();
+
 import { initializeTracing } from './utils/tracing.js';
 initializeTracing();
 
@@ -82,8 +95,8 @@ startAllProcessors();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key-change-in-prod';
-const REFRESH_SECRET = process.env.REFRESH_SECRET || 'dev-refresh-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET;
+const REFRESH_SECRET = process.env.REFRESH_SECRET;
 
 // Setup __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);

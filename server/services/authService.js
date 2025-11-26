@@ -3,8 +3,12 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { z } from 'zod';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key-change-in-prod';
-const REFRESH_SECRET = process.env.REFRESH_SECRET || 'dev-refresh-secret-key';
+if (!process.env.JWT_SECRET || !process.env.REFRESH_SECRET) {
+    throw new Error('JWT_SECRET and REFRESH_SECRET environment variables must be configured');
+}
+
+const JWT_SECRET = process.env.JWT_SECRET;
+const REFRESH_SECRET = process.env.REFRESH_SECRET;
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY = '7d';
 const EMAIL_VERIFICATION_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
