@@ -57,6 +57,7 @@ import backupRoutes from './routes/backup.js';
 import { generateAIContent } from './services/tracedAiService.js';
 import alertingRoutes from './routes/alerting.js';
 import notificationsRouter from './routes/notifications.js';
+import mobileRouter from './routes/mobile.js';
 import { initializeSocketIO } from './config/socket.js';
 import { setSocketIO } from './services/notificationService.js';
 import { createServer } from 'http';
@@ -220,6 +221,9 @@ app.use('/api/alerting', authenticateToken, alertingRoutes);
 
 // NOTIFICATION ROUTES
 app.use('/api/notifications', notificationsRouter);
+
+// MOBILE API ROUTES
+app.use('/api/mobile', mobileRouter);
 
 // FILE UPLOAD
 app.post('/api/upload', authenticateToken, userRateLimit, upload.single('file'), asyncHandler(async (req, res) => {

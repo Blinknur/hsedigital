@@ -15,3 +15,10 @@ server/tests/load-testing/results/*.md
 
 # Keep the results directory but ignore contents
 !server/tests/load-testing/results/.gitkeep
+
+# Mobile API - Image uploads
+server/public/uploads/
+public/uploads/
+*_compressed.*
+*_thumbnail.*
+*_mobile.*
