@@ -6,6 +6,7 @@ import { buildCursorPagination, formatCursorResponse } from '../utils/pagination
 import { tenantCacheMiddleware, invalidateTenantCacheMiddleware } from '../middleware/caching.js';
 import { requireQuota, trackUsage } from '../middleware/quota.js';
 import { validateRequest, validateParams, incidentSchema, idParamSchema } from '../middleware/validation.js';
+import { notificationService } from '../services/notificationService.js';
 
 const router = express.Router();
 
@@ -143,6 +144,8 @@ router.post(
         }
       });
       
+      notificationService.incidentCreated(req.tenantId, incident);
+      
       res.status(201).json(incident);
     } catch (error) {
       console.error('Error creating incident:', error);
@@ -163,6 +166,14 @@ router.put(
     try {
       const { id } = req.params;
       
+      const existingIncident = await prisma.incident.findFirst({
+        where: { id, organizationId: req.tenantId }
+      });
+
+      if (!existingIncident) {
+        return res.status(404).json({ error: 'Incident not found' });
+      }
+
       const updated = await prisma.incident.updateMany({
         where: {
           id,
@@ -170,10 +181,6 @@ router.put(
         },
         data: req.validatedData
       });
-
-      if (updated.count === 0) {
-        return res.status(404).json({ error: 'Incident not found' });
-      }
 
       const incident = await prisma.incident.findFirst({
         where: { id, organizationId: req.tenantId },
@@ -194,6 +201,17 @@ router.put(
           }
         }
       });
+
+      if (req.validatedData.status && existingIncident.status !== req.validatedData.status) {
+        notificationService.incidentStatusChanged(
+          req.tenantId, 
+          incident, 
+          existingIncident.status, 
+          req.validatedData.status
+        );
+      } else {
+        notificationService.incidentUpdated(req.tenantId, incident, req.validatedData);
+      }
 
       res.json(incident);
     } catch (error) {

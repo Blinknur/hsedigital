@@ -1,5 +1,6 @@
 import { checkQuota, incrementUsage, checkFeatureAccess } from '../services/quotaService.js';
 import { advancedAlertingService } from '../services/alertingService.js';
+import { notificationService } from '../services/notificationService.js';
 
 export const requireQuota = (resource) => {
     return async (req, res, next) => {
@@ -27,6 +28,8 @@ export const requireQuota = (resource) => {
                     percentage
                 ).catch(err => console.error('Alert failed:', err));
                 
+                notificationService.quotaExceeded(organizationId, resource, quotaCheck.current, quotaCheck.limit);
+                
                 return res.status(403).json({
                     error: 'Quota exceeded',
                     code: 'QUOTA_EXCEEDED',
@@ -36,6 +39,11 @@ export const requireQuota = (resource) => {
                     plan: quotaCheck.plan,
                     upgrade_required: true
                 });
+            }
+            
+            const percentage = quotaCheck.limit > 0 ? (quotaCheck.current / quotaCheck.limit) * 100 : 0;
+            if (percentage >= 80 && percentage < 100) {
+                notificationService.quotaWarning(organizationId, resource, quotaCheck.current, quotaCheck.limit);
             }
             
             req.quotaCheck = quotaCheck;

@@ -7,6 +7,7 @@ import { tenantCacheMiddleware, invalidateTenantCacheMiddleware } from '../middl
 import { requireQuota, trackUsage } from '../middleware/quota.js';
 import { validateRequest, validateParams, auditSchema, idParamSchema } from '../middleware/validation.js';
 import { auditLog, captureOriginalEntity } from '../middleware/auditLog.js';
+import { notificationService } from '../services/notificationService.js';
 
 const router = express.Router();
 
@@ -150,6 +151,8 @@ router.post(
         }
       });
       
+      notificationService.auditCreated(req.tenantId, audit);
+      
       res.status(201).json(audit);
     } catch (error) {
       console.error('Error creating audit:', error);
@@ -173,6 +176,14 @@ router.put(
       const { id } = req.params;
       const updateData = { ...req.validatedData };
       
+      const existingAudit = await prisma.audit.findFirst({
+        where: { id, organizationId: req.tenantId }
+      });
+
+      if (!existingAudit) {
+        return res.status(404).json({ error: 'Audit not found' });
+      }
+
       if (updateData.scheduledDate) updateData.scheduledDate = new Date(updateData.scheduledDate);
       if (updateData.completedDate) updateData.completedDate = new Date(updateData.completedDate);
       
@@ -183,10 +194,6 @@ router.put(
         },
         data: updateData
       });
-
-      if (updated.count === 0) {
-        return res.status(404).json({ error: 'Audit not found' });
-      }
 
       const audit = await prisma.audit.findFirst({
         where: { id, organizationId: req.tenantId },
@@ -208,6 +215,17 @@ router.put(
           }
         }
       });
+
+      if (req.validatedData.status && existingAudit.status !== req.validatedData.status) {
+        notificationService.auditStatusChanged(
+          req.tenantId, 
+          audit, 
+          existingAudit.status, 
+          req.validatedData.status
+        );
+      } else {
+        notificationService.auditUpdated(req.tenantId, audit, req.validatedData);
+      }
 
       res.json(audit);
     } catch (error) {

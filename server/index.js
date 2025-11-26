@@ -56,6 +56,10 @@ import { advancedAlertingService } from './services/alertingService.js';
 import backupRoutes from './routes/backup.js';
 import { generateAIContent } from './services/tracedAiService.js';
 import alertingRoutes from './routes/alerting.js';
+import notificationsRouter from './routes/notifications.js';
+import { initializeSocketIO } from './config/socket.js';
+import { setSocketIO } from './services/notificationService.js';
+import { createServer } from 'http';
 
 dotenv.config();
 
@@ -213,6 +217,9 @@ app.use('/api/backup', authenticateToken, requireRole('Admin'), backupRoutes);
 
 // ALERTING ROUTES
 app.use('/api/alerting', authenticateToken, alertingRoutes);
+
+// NOTIFICATION ROUTES
+app.use('/api/notifications', notificationsRouter);
 
 // FILE UPLOAD
 app.post('/api/upload', authenticateToken, userRateLimit, upload.single('file'), asyncHandler(async (req, res) => {
@@ -464,9 +471,14 @@ app.use((err, req, res, next) => {
 });
 
 // --- Startup ---
-const server = app.listen(PORT, () => {
+const httpServer = createServer(app);
+const io = initializeSocketIO(httpServer);
+setSocketIO(io);
+
+const server = httpServer.listen(PORT, () => {
     logger.info({ port: PORT, env: process.env.NODE_ENV }, `🚀 Server running on http://localhost:${PORT}`);
     logger.info('✅ Monitoring enabled: Logs (Pino), Metrics (Prometheus), Errors (Sentry), Alerts (Custom)');
+    logger.info('✅ WebSocket server initialized with Redis adapter for horizontal scaling');
     startAuditLogCleanupScheduler();
 });
 

@@ -2,6 +2,7 @@ import prisma from '../utils/db.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { notificationService } from '../services/notificationService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -200,7 +201,7 @@ export const auditLog = (entityType) => {
         }
 
         if (['CREATE', 'UPDATE', 'DELETE'].includes(action)) {
-          await prisma.auditLog.create({
+          const auditLogEntry = await prisma.auditLog.create({
             data: {
               organizationId: req.tenantId,
               userId: req.user.id,
@@ -215,6 +216,8 @@ export const auditLog = (entityType) => {
               changes: sanitizeChanges(changes)
             }
           });
+
+          notificationService.auditLogCreated(req.tenantId, auditLogEntry);
         }
       } catch (error) {
         console.error('Audit log error:', error);
