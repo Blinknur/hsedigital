@@ -33,3 +33,15 @@ server/public/reports/*.pdf
 
 # Queue system generated files
 server/public/exports/
+
+# SDK build artifacts
+sdks/typescript/node_modules/
+sdks/typescript/dist/
+sdks/python/build/
+sdks/python/dist/
+sdks/python/*.egg-info/
+sdks/python/__pycache__/
+sdks/python/**/__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
