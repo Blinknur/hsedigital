@@ -197,6 +197,7 @@ export async function provisionOrganization({ organizationName, ownerName, owner
     return await prisma.$transaction(async (tx) => {
         const hashedPassword = await authService.hashPassword(ownerPassword);
         const emailVerificationToken = authService.generateEmailVerificationToken();
+        const hashedEmailToken = authService.hashToken(emailVerificationToken);
         const emailVerificationExpires = authService.getEmailVerificationExpiry();
         
         const baseSlug = generateSlug(organizationName);
@@ -209,7 +210,7 @@ export async function provisionOrganization({ organizationName, ownerName, owner
                 password: hashedPassword,
                 role: 'Owner',
                 isEmailVerified: false,
-                emailVerificationToken,
+                emailVerificationToken: hashedEmailToken,
                 emailVerificationExpires
             }
         });

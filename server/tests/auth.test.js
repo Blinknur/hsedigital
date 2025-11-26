@@ -110,6 +110,29 @@ async function testRefreshTokenRotation() {
     console.log('');
 }
 
+async function testTokenHashing() {
+    console.log('Test 8: Token Hashing with SHA-256');
+    const emailToken = authService.generateEmailVerificationToken();
+    const hashedEmailToken = authService.hashToken(emailToken);
+    
+    console.log('✓ Original email token:', emailToken.substring(0, 30) + '...');
+    console.log('✓ Hashed email token:', hashedEmailToken.substring(0, 30) + '...');
+    console.log('✓ Hashed token length:', hashedEmailToken.length, '(SHA-256 produces 64 hex chars)');
+    
+    const passwordResetToken = authService.generatePasswordResetToken();
+    const hashedPasswordToken = authService.hashToken(passwordResetToken);
+    
+    console.log('✓ Original password reset token:', passwordResetToken.substring(0, 30) + '...');
+    console.log('✓ Hashed password reset token:', hashedPasswordToken.substring(0, 30) + '...');
+    
+    const sameTokenHashed1 = authService.hashToken(emailToken);
+    const sameTokenHashed2 = authService.hashToken(emailToken);
+    console.log('✓ Same input produces same hash:', sameTokenHashed1 === sameTokenHashed2 ? 'PASS' : 'FAIL');
+    
+    console.log('✓ Different tokens produce different hashes:', hashedEmailToken !== hashedPasswordToken ? 'PASS' : 'FAIL');
+    console.log('');
+}
+
 async function runAllTests() {
     try {
         await testPasswordHashing();
@@ -119,6 +142,7 @@ async function runAllTests() {
         await testPasswordResetToken();
         await testValidationSchemas();
         await testRefreshTokenRotation();
+        await testTokenHashing();
         console.log('=== All Tests Completed Successfully ===');
     } catch (error) {
         console.error('Test failed:', error);

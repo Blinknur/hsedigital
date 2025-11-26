@@ -55,6 +55,7 @@ router.post('/signup-with-org', asyncHandler(async (req, res) => {
 
     const hashedPassword = await authService.hashPassword(password);
     const emailVerificationToken = authService.generateEmailVerificationToken();
+    const hashedEmailToken = authService.hashToken(emailVerificationToken);
     const emailVerificationExpires = authService.getEmailVerificationExpiry();
 
     const organization = await prisma.organization.create({
@@ -72,7 +73,7 @@ router.post('/signup-with-org', asyncHandler(async (req, res) => {
             password: hashedPassword,
             role: 'Admin',
             organizationId: organization.id,
-            emailVerificationToken,
+            emailVerificationToken: hashedEmailToken,
             emailVerificationExpires,
             isEmailVerified: false,
         }
@@ -118,6 +119,7 @@ router.post('/register', asyncHandler(async (req, res) => {
 
     const hashedPassword = await authService.hashPassword(password);
     const emailVerificationToken = authService.generateEmailVerificationToken();
+    const hashedEmailToken = authService.hashToken(emailVerificationToken);
     const emailVerificationExpires = authService.getEmailVerificationExpiry();
 
     const user = await prisma.user.create({
@@ -127,7 +129,7 @@ router.post('/register', asyncHandler(async (req, res) => {
             password: hashedPassword,
             role: role || 'Station Manager',
             organizationId: organizationId || null,
-            emailVerificationToken,
+            emailVerificationToken: hashedEmailToken,
             emailVerificationExpires,
             isEmailVerified: false,
         }
@@ -194,9 +196,11 @@ router.post('/verify-email', asyncHandler(async (req, res) => {
         return res.status(400).json({ error: 'Token is required' });
     }
 
+    const hashedToken = authService.hashToken(token);
+
     const user = await prisma.user.findFirst({
         where: {
-            emailVerificationToken: token,
+            emailVerificationToken: hashedToken,
             emailVerificationExpires: { gt: new Date() }
         }
     });
@@ -236,12 +240,13 @@ router.post('/resend-verification', asyncHandler(async (req, res) => {
     }
 
     const emailVerificationToken = authService.generateEmailVerificationToken();
+    const hashedEmailToken = authService.hashToken(emailVerificationToken);
     const emailVerificationExpires = authService.getEmailVerificationExpiry();
 
     await prisma.user.update({
         where: { id: user.id },
         data: {
-            emailVerificationToken,
+            emailVerificationToken: hashedEmailToken,
             emailVerificationExpires
         }
     });
@@ -273,12 +278,13 @@ router.post('/password-reset-request', asyncHandler(async (req, res) => {
     }
 
     const passwordResetToken = authService.generatePasswordResetToken();
+    const hashedPasswordResetToken = authService.hashToken(passwordResetToken);
     const passwordResetExpires = authService.getPasswordResetExpiry();
 
     await prisma.user.update({
         where: { id: user.id },
         data: {
-            passwordResetToken,
+            passwordResetToken: hashedPasswordResetToken,
             passwordResetExpires
         }
     });
@@ -303,9 +309,11 @@ router.post('/password-reset', asyncHandler(async (req, res) => {
 
     const { token, newPassword } = validation.data;
 
+    const hashedToken = authService.hashToken(token);
+
     const user = await prisma.user.findFirst({
         where: {
-            passwordResetToken: token,
+            passwordResetToken: hashedToken,
             passwordResetExpires: { gt: new Date() }
         }
     });

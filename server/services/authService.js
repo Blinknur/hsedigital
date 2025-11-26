@@ -114,6 +114,11 @@ export const authService = {
         return crypto.randomBytes(32).toString('hex');
     },
 
+    // Hash token with SHA-256
+    hashToken: (token) => {
+        return crypto.createHash('sha256').update(token).digest('hex');
+    },
+
     // Generate password reset token
     generatePasswordResetToken: () => {
         return crypto.randomBytes(32).toString('hex');
