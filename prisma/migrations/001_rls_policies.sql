@@ -97,6 +97,9 @@ ALTER TABLE "contractors" ENABLE ROW LEVEL SECURITY;
 -- Enable RLS on form_definitions table
 ALTER TABLE "form_definitions" ENABLE ROW LEVEL SECURITY;
 
+-- Enable RLS on work_permits table
+ALTER TABLE "work_permits" ENABLE ROW LEVEL SECURITY;
+
 -- Note: organizations, roles, permissions, role_permissions, and user_roles tables
 -- are NOT tenant-scoped and should not have RLS enabled
 
@@ -275,7 +278,33 @@ CREATE POLICY form_definitions_tenant_isolation_delete ON "form_definitions"
     USING ("organizationId" = get_current_organization_id());
 
 -- ========================================
--- 11. CREATE INDEXES FOR RLS PERFORMANCE
+-- 11. CREATE RLS POLICIES FOR WORK_PERMITS TABLE
+-- ========================================
+
+-- Policy: Work permits are scoped to organization
+CREATE POLICY work_permits_tenant_isolation_select ON "work_permits"
+    FOR SELECT
+    TO hse_app_role
+    USING ("organizationId" = get_current_organization_id());
+
+CREATE POLICY work_permits_tenant_isolation_insert ON "work_permits"
+    FOR INSERT
+    TO hse_app_role
+    WITH CHECK ("organizationId" = get_current_organization_id());
+
+CREATE POLICY work_permits_tenant_isolation_update ON "work_permits"
+    FOR UPDATE
+    TO hse_app_role
+    USING ("organizationId" = get_current_organization_id())
+    WITH CHECK ("organizationId" = get_current_organization_id());
+
+CREATE POLICY work_permits_tenant_isolation_delete ON "work_permits"
+    FOR DELETE
+    TO hse_app_role
+    USING ("organizationId" = get_current_organization_id());
+
+-- ========================================
+-- 12. CREATE INDEXES FOR RLS PERFORMANCE
 -- ========================================
 
 -- Ensure organizationId columns are indexed for optimal RLS performance
@@ -285,9 +314,10 @@ CREATE INDEX IF NOT EXISTS idx_audits_organization_id ON "audits"("organizationI
 CREATE INDEX IF NOT EXISTS idx_incidents_organization_id ON "incidents"("organizationId");
 CREATE INDEX IF NOT EXISTS idx_contractors_organization_id ON "contractors"("organizationId");
 CREATE INDEX IF NOT EXISTS idx_form_definitions_organization_id ON "form_definitions"("organizationId");
+CREATE INDEX IF NOT EXISTS idx_work_permits_organization_id ON "work_permits"("organizationId");
 
 -- ========================================
--- 12. GRANT PERMISSIONS ON HELPER FUNCTION
+-- 13. GRANT PERMISSIONS ON HELPER FUNCTION
 -- ========================================
 
 GRANT EXECUTE ON FUNCTION get_current_organization_id() TO hse_app_role;
