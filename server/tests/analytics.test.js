@@ -1,51 +1,45 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
-import analyticsService from '../services/analyticsService.js';
-import prisma from '../utils/db.js';
+import analyticsService from '../src/core/services/analyticsService.js';
+import { 
+  getTestPrisma, 
+  createCleanupManager,
+  generateTestEmail,
+  generateTestSubdomain,
+  testDataHelpers
+} from './helpers/index.js';
 
 describe('Analytics Service', () => {
+  let prisma;
+  let cleanup;
   let testOrgId;
   let testStationId;
   let testUserId;
 
   beforeAll(async () => {
-    const testOrg = await prisma.organization.create({
-      data: {
-        name: 'Test Analytics Org',
-        slug: `test-analytics-${Date.now()}`,
-        ownerId: 'test-owner'
-      }
+    prisma = getTestPrisma();
+    cleanup = createCleanupManager();
+
+    const testOrg = await testDataHelpers.createTestOrganization(prisma)({
+      name: 'Test Analytics Org',
+      slug: generateTestSubdomain(),
     });
     testOrgId = testOrg.id;
+    cleanup.track('organizations', testOrgId);
 
-    const testUser = await prisma.user.create({
-      data: {
-        email: `analytics-test-${Date.now()}@example.com`,
-        name: 'Test Auditor',
-        password: 'hashed',
-        organizationId: testOrgId
-      }
+    const testUser = await testDataHelpers.createTestUser(prisma)(testOrgId, {
+      email: generateTestEmail(),
+      name: 'Test Auditor',
     });
     testUserId = testUser.id;
+    cleanup.track('users', testUserId);
 
-    const testStation = await prisma.station.create({
-      data: {
-        name: 'Test Station',
-        brand: 'Test Brand',
-        region: 'Test Region',
-        address: '123 Test St',
-        location: { lat: 0, lng: 0 },
-        organizationId: testOrgId
-      }
-    });
+    const testStation = await testDataHelpers.createTestStation(prisma)(testOrgId);
     testStationId = testStation.id;
+    cleanup.track('stations', testStationId);
   });
 
   afterAll(async () => {
-    await prisma.incident.deleteMany({ where: { organizationId: testOrgId } });
-    await prisma.audit.deleteMany({ where: { organizationId: testOrgId } });
-    await prisma.station.deleteMany({ where: { organizationId: testOrgId } });
-    await prisma.user.deleteMany({ where: { organizationId: testOrgId } });
-    await prisma.organization.delete({ where: { id: testOrgId } });
+    await cleanup.cleanup();
   });
 
   describe('calculateAuditCompletionRate', () => {

@@ -1,349 +1,476 @@
-# End-to-End Integration Test Suite
+# Test Infrastructure
 
-## Overview
+Unified test infrastructure for HSE.Digital backend with Jest framework, shared fixtures, database seeding utilities, and authentication helpers.
 
-This E2E test suite validates critical user journeys in the HSE.Digital platform running against a fully containerized environment with test data isolation.
+## Table of Contents
 
-## Test Coverage
+- [Quick Start](#quick-start)
+- [Test Structure](#test-structure)
+- [Configuration](#configuration)
+- [Writing Tests](#writing-tests)
+- [Test Helpers](#test-helpers)
+- [Fixtures](#fixtures)
+- [Database Management](#database-management)
+- [Running Tests](#running-tests)
+- [Best Practices](#best-practices)
 
-### Critical User Journeys
-
-1. **User Signup with Organization**
-   - Creates new organization with subdomain
-   - Registers admin user
-   - Validates organization provisioning
-
-2. **User Authentication**
-   - Email verification bypass for testing
-   - JWT token generation and validation
-   - Session management
-
-3. **Stripe Integration**
-   - Checkout session creation
-   - Webhook simulation (checkout.session.completed)
-   - Subscription activation
-   - Plan upgrade flow
-
-4. **Station Management**
-   - Station creation with multi-tenant isolation
-   - Organization-scoped data access
-
-5. **Audit Creation with File Uploads**
-   - Audit record creation
-   - File upload simulation
-   - Findings attachment
-   - Score calculation
-
-6. **Audit Updates**
-   - Status transitions
-   - Findings addition
-   - Photo attachments
-   - Overall score updates
-
-7. **Incident Reporting**
-   - Incident creation
-   - Severity classification
-   - Reporter assignment
-
-8. **Incident Notifications**
-   - Email alert generation
-   - Notification delivery (mocked in test env)
-   - Alert content validation
-
-9. **Tenant Isolation**
-   - Cross-tenant data access prevention
-   - Organization-scoped queries
-   - Data leakage prevention
-
-10. **Data Cleanup**
-    - Automatic test data removal
-    - Database state reset
-    - No test pollution
-
-## Running Tests
-
-### Local Development Environment
+## Quick Start
 
 ```bash
-# Run against local running instance
-cd server
-npm run test:e2e
+# Install dependencies
+npm install
+
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm test -- --watch
+
+# Run specific test file
+npm test -- auth.test.js
+
+# Run tests with coverage
+npm test -- --coverage
+
+# Run tests matching pattern
+npm test -- --testNamePattern="should create user"
 ```
 
-### Docker Environment (Recommended)
+## Test Structure
 
-```bash
-# Start test environment
-docker-compose -f docker-compose.test.yml up -d
+```
+tests/
+├── setup/                    # Global setup and teardown
+│   ├── global-setup.js      # Runs once before all tests
+│   ├── global-teardown.js   # Runs once after all tests
+│   └── jest.setup.js        # Jest configuration
+├── helpers/                  # Test helper functions
+│   ├── auth.helpers.js      # Authentication utilities
+│   ├── db.helpers.js        # Database utilities
+│   ├── test-data.helpers.js # Test data generators
+│   └── index.js             # Aggregated exports
+├── fixtures/                 # Shared test data
+│   ├── organizations.fixture.js
+│   ├── users.fixture.js
+│   ├── stations.fixture.js
+│   └── index.js
+├── utils/                    # Utility functions
+│   ├── seed.utils.js        # Database seeding
+│   └── cleanup.utils.js     # Resource cleanup
+└── *.test.js                # Test files
 
-# Wait for services to be healthy
-docker-compose -f docker-compose.test.yml ps
-
-# Run E2E tests
-docker-compose -f docker-compose.test.yml exec app-test npm run test:e2e
-
-# View logs
-docker-compose -f docker-compose.test.yml logs -f app-test
-
-# Cleanup
-docker-compose -f docker-compose.test.yml down -v
 ```
 
-### Production-like Environment
+## Configuration
 
-```bash
-# Run against main docker-compose
-npm run docker:up
-npm run docker:logs:app
-
-# In another terminal
-docker-compose exec app npm run test:e2e
-
-# Cleanup
-npm run docker:down
-```
-
-## Test Configuration
-
-### Environment Variables
-
-- `API_BASE_URL`: Base URL for API requests (default: `http://localhost:3001`)
-- `TEST_DATABASE_URL`: Database connection for test data (default: uses `DATABASE_URL`)
-- `JWT_SECRET`: Secret for JWT token generation
-- `STRIPE_SECRET_KEY`: Stripe API key (optional, tests handle missing config)
-- `SMTP_HOST`: Email server (optional, notifications are mocked if not configured)
-
-### Test Isolation
-
-Each test run:
-- Creates unique organization with timestamp-based subdomain
-- Generates unique email addresses
-- Uses isolated database transactions where possible
-- Cleans up all created data automatically
-
-### Data Isolation Strategy
+### jest.config.js
 
 ```javascript
-// Unique identifiers prevent collisions
-const subdomain = `test-org-${Date.now()}`;
-const email = `test-${Date.now()}@example.com`;
-
-// Cleanup ensures no test pollution
-await cleanupTestData();
-```
-
-## Test Output
-
-### Success Output
-```
-╔═══════════════════════════════════════════════╗
-║   E2E Integration Test Suite                 ║
-║   Critical User Journeys                     ║
-╚═══════════════════════════════════════════════╝
-
-✓ Service is ready
-
-=== Test 1: Signup with Organization ===
-✅ Signup successful
-  - Organization ID: clx...
-  - User ID: clx...
-
-=== Test 2: User Login ===
-✅ Login successful
-
-=== Test 3: Stripe Checkout Session Creation ===
-✅ Stripe checkout session created
-
-...
-
-==================================================
-✅ ALL E2E TESTS PASSED
-==================================================
-```
-
-### Failure Output
-```
-❌ Test suite error: Connection timeout
-
-==================================================
-❌ 3 TEST(S) FAILED:
-  - Signup failed
-  - Login failed
-  - Stripe checkout failed
-==================================================
-```
-
-## Test Architecture
-
-### Request Helper
-```javascript
-const makeRequest = (method, path, data, token) => {
-    // HTTP client for API calls
-    // Handles authentication
-    // Parses JSON responses
-};
-```
-
-### Service Health Check
-```javascript
-const waitForService = async (maxAttempts = 30) => {
-    // Polls /api/health endpoint
-    // Waits up to 60 seconds
-    // Throws if service doesn't start
-};
-```
-
-### Test Context
-```javascript
-let testContext = {
-    organizationId: null,
-    userId: null,
-    accessToken: null,
-    stationId: null,
-    auditId: null,
-    incidentId: null
-};
-```
-
-## Extending Tests
-
-### Adding New Test Cases
-
-```javascript
-const testNewFeature = async () => {
-    console.log('\n=== Test N: New Feature ===');
-    
-    // Test implementation
-    const result = await makeRequest('POST', '/api/new-endpoint', {
-        // test data
-    }, testContext.accessToken);
-    
-    if (result.status === 200) {
-        console.log('✅ New feature test passed');
-        return true;
-    } else {
-        console.error('❌ New feature test failed');
-        return false;
+{
+  testEnvironment: 'node',
+  testTimeout: 30000,
+  coverageThresholds: {
+    global: {
+      branches: 60,
+      functions: 60,
+      lines: 60,
+      statements: 60
     }
-};
-
-// Add to test suite
-async function runE2ETests() {
-    // ...
-    if (!await testNewFeature()) errors.push('New feature failed');
-    // ...
+  }
 }
 ```
 
-### Test Helpers
+### Environment Variables
 
-Use `test-helpers.js` for common operations:
+```bash
+# Required
+DATABASE_URL=postgresql://user:password@localhost:5432/hse_digital
+TEST_DATABASE_URL=postgresql://user:password@localhost:5432/hse_digital_test
+JWT_SECRET=your-jwt-secret
+REFRESH_SECRET=your-refresh-secret
 
-```javascript
-import { 
-    generateTestEmail, 
-    createTestOrganization,
-    retryOperation 
-} from './test-helpers.js';
-
-// Generate unique test data
-const email = generateTestEmail();
-
-// Retry flaky operations
-await retryOperation(async () => {
-    // operation that might fail
-}, 3, 1000);
+# Optional
+REDIS_HOST=localhost
+REDIS_PORT=6379
+DEBUG_TESTS=false
 ```
 
-## CI/CD Integration
+## Writing Tests
 
-### GitHub Actions Example
+### Basic Test Structure
 
-```yaml
-name: E2E Tests
+```javascript
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
+import { getTestPrisma, createCleanupManager, authHelpers, generateTestEmail } from './helpers/index.js';
 
-on: [push, pull_request]
+describe('Feature Tests', () => {
+  let prisma;
+  let cleanup;
 
-jobs:
-  e2e:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      
-      - name: Start test environment
-        run: docker-compose -f docker-compose.test.yml up -d
-      
-      - name: Wait for services
-        run: sleep 30
-      
-      - name: Run E2E tests
-        run: docker-compose -f docker-compose.test.yml exec -T app-test npm run test:e2e
-      
-      - name: Cleanup
-        if: always()
-        run: docker-compose -f docker-compose.test.yml down -v
+  beforeAll(async () => {
+    prisma = getTestPrisma();
+    cleanup = createCleanupManager();
+  });
+
+  afterAll(async () => {
+    await cleanup.cleanup();
+  });
+
+  beforeEach(() => {
+    // Reset mocks if needed
+  });
+
+  it('should test something', async () => {
+    // Arrange
+    const org = await prisma.organization.create({
+      data: { name: 'Test Org', slug: 'test-org' }
+    });
+    cleanup.track('organizations', org.id);
+
+    // Act
+    const result = await someFunction(org.id);
+
+    // Assert
+    expect(result).toBeDefined();
+  });
+});
+```
+
+### Using Fixtures
+
+```javascript
+import { organizationFixtures, userFixtures } from './fixtures/index.js';
+
+it('should create organization with fixture data', async () => {
+  const org = await prisma.organization.create({
+    data: {
+      ...organizationFixtures.freeOrganization,
+      slug: generateTestSubdomain(),
+      ownerId: 'test-owner'
+    }
+  });
+  
+  expect(org.subscriptionPlan).toBe('free');
+});
+```
+
+### Using Test Data Helpers
+
+```javascript
+import { testDataHelpers } from './helpers/index.js';
+
+it('should create test user', async () => {
+  const org = await testDataHelpers.createTestOrganization(prisma)();
+  const user = await testDataHelpers.createTestUser(prisma)(org.id, {
+    role: 'Admin',
+    email: 'custom@example.com'
+  });
+  
+  expect(user.organizationId).toBe(org.id);
+});
+```
+
+## Test Helpers
+
+### Authentication Helpers
+
+```javascript
+import { authHelpers } from './helpers/index.js';
+
+// Hash passwords
+const hashedPassword = await authHelpers.hashPassword('password123');
+
+// Generate tokens
+const tokens = authHelpers.generateTokens(user);
+const { accessToken, refreshToken } = tokens;
+
+// Verify tokens
+const decoded = authHelpers.verifyAccessToken(accessToken);
+
+// Create auth headers
+const headers = authHelpers.createAuthHeader(accessToken);
+```
+
+### Database Helpers
+
+```javascript
+import { dbHelpers } from './helpers/index.js';
+
+// Get Prisma instance
+const prisma = dbHelpers.getPrisma();
+
+// Clean entire database
+await dbHelpers.cleanDatabase();
+
+// Cleanup specific resources
+await dbHelpers.cleanupTestData('users', [userId1, userId2]);
+
+// Execute raw SQL
+await dbHelpers.executeRaw('DELETE FROM "User" WHERE email LIKE $1', 'test%');
+
+// Run transaction
+await dbHelpers.transaction(async (tx) => {
+  await tx.user.create({ data: userData });
+  await tx.organization.create({ data: orgData });
+});
+```
+
+### Cleanup Manager
+
+```javascript
+import { createCleanupManager } from './helpers/index.js';
+
+describe('Tests with cleanup', () => {
+  let cleanup;
+
+  beforeAll(() => {
+    cleanup = createCleanupManager();
+  });
+
+  afterAll(async () => {
+    await cleanup.cleanup();
+  });
+
+  it('tracks and cleans resources', async () => {
+    const org = await prisma.organization.create({ data: orgData });
+    cleanup.track('organizations', org.id);
+
+    const user = await prisma.user.create({ data: userData });
+    cleanup.track('users', user.id);
+
+    // Cleanup runs automatically in afterAll
+  });
+});
+```
+
+## Fixtures
+
+### Available Fixtures
+
+- **organizationFixtures**: `freeOrganization`, `proOrganization`, `enterpriseOrganization`, `suspendedOrganization`
+- **userFixtures**: `adminUser`, `complianceManager`, `stationManager`, `auditor`, `contractor`
+- **stationFixtures**: `lowRiskStation`, `mediumRiskStation`, `highRiskStation`, `inactiveStation`
+- **auditFixtures**: `scheduledAudit`, `completedAudit`, `failedAudit`
+- **incidentFixtures**: `lowSeverityIncident`, `highSeverityIncident`, `criticalIncident`
+- **contractorFixtures**: `electricalContractor`, `mechanicalContractor`, `civilContractor`
+- **formFixtures**: `dailyChecklist`, `weeklyInspection`
+
+## Database Management
+
+### Seeding Test Data
+
+```javascript
+import { seedTestDatabase, seedRBACData } from './helpers/index.js';
+
+beforeAll(async () => {
+  // Seed with custom options
+  const seededData = await seedTestDatabase({
+    organizations: 2,
+    usersPerOrg: 3,
+    stationsPerOrg: 5,
+    auditsPerStation: 2,
+    incidentsPerStation: 1
+  });
+
+  // Seed RBAC data
+  const { roles, permissions } = await seedRBACData();
+});
+```
+
+### Cleaning Up
+
+```javascript
+import { cleanupSeededData } from './helpers/index.js';
+
+afterAll(async () => {
+  await cleanupSeededData(seededData);
+});
+```
+
+## Running Tests
+
+### Run All Tests
+```bash
+npm test
+```
+
+### Run Specific Test Suite
+```bash
+npm test -- auth.test.js
+npm test -- security.test.js
+```
+
+### Run Tests with Coverage
+```bash
+npm test -- --coverage
+```
+
+### Run Tests in Watch Mode
+```bash
+npm test -- --watch
+```
+
+### Run Tests Matching Pattern
+```bash
+npm test -- --testNamePattern="authentication"
+```
+
+### Run Tests for Specific File
+```bash
+npm test -- --testPathPattern="auth"
+```
+
+### Debug Tests
+```bash
+node --inspect-brk node_modules/.bin/jest --runInBand
+```
+
+## Best Practices
+
+### 1. Use beforeAll/afterAll for Setup/Teardown
+
+```javascript
+describe('Feature', () => {
+  beforeAll(async () => {
+    // Setup once
+  });
+
+  afterAll(async () => {
+    // Cleanup once
+  });
+});
+```
+
+### 2. Track Created Resources
+
+Always track resources you create for cleanup:
+
+```javascript
+const org = await prisma.organization.create({ data: orgData });
+cleanup.track('organizations', org.id);
+```
+
+### 3. Use Unique Test Data
+
+Generate unique data to avoid conflicts:
+
+```javascript
+import { generateTestEmail, generateTestSubdomain } from './helpers/index.js';
+
+const email = generateTestEmail(); // test-1234567890-abc@example.com
+const slug = generateTestSubdomain(); // test-org-1234567890-xyz
+```
+
+### 4. Test in Isolation
+
+Each test should be independent:
+
+```javascript
+// ❌ Bad - tests depend on each other
+it('creates user', () => { /* ... */ });
+it('updates user', () => { /* uses user from previous test */ });
+
+// ✅ Good - each test is independent
+it('creates user', () => { /* creates own user */ });
+it('updates user', () => { /* creates own user, then updates */ });
+```
+
+### 5. Use Descriptive Test Names
+
+```javascript
+// ❌ Bad
+it('works', () => { /* ... */ });
+
+// ✅ Good
+it('should create organization with valid data', () => { /* ... */ });
+it('should reject invalid email format', () => { /* ... */ });
+```
+
+### 6. Group Related Tests
+
+```javascript
+describe('User Authentication', () => {
+  describe('Login', () => {
+    it('should login with valid credentials', () => { /* ... */ });
+    it('should reject invalid password', () => { /* ... */ });
+  });
+
+  describe('Logout', () => {
+    it('should invalidate token on logout', () => { /* ... */ });
+  });
+});
+```
+
+### 7. Handle Async Operations
+
+Always use async/await:
+
+```javascript
+it('should handle async operation', async () => {
+  const result = await asyncFunction();
+  expect(result).toBeDefined();
+});
+```
+
+### 8. Clean Up After Tests
+
+```javascript
+afterEach(async () => {
+  // Clean up after each test if needed
+});
+
+afterAll(async () => {
+  // Clean up after all tests
+  await cleanup.cleanup();
+});
 ```
 
 ## Troubleshooting
 
 ### Tests Timing Out
 
-- Increase `waitForService` maxAttempts
-- Check service health: `docker-compose ps`
-- View logs: `docker-compose logs app`
+Increase timeout in test or config:
 
-### Database Connection Errors
+```javascript
+it('long running test', async () => {
+  // Test code
+}, 60000); // 60 second timeout
+```
 
-- Ensure Prisma schema is pushed: `npx prisma db push`
-- Check DATABASE_URL environment variable
-- Verify PostgreSQL is running and healthy
+### Database Connection Issues
 
-### Authentication Failures
+Check environment variables:
 
-- Verify JWT_SECRET is set
-- Check token generation in authService
-- Ensure email verification is bypassed in tests
+```bash
+echo $DATABASE_URL
+echo $TEST_DATABASE_URL
+```
 
-### Tenant Isolation Failures
+### Redis Connection Issues
 
-- Review Prisma middleware in `prismaClient.js`
-- Check organizationId is set correctly
-- Verify RLS policies (if applicable)
+Skip Redis-dependent tests if Redis is unavailable:
 
-## Best Practices
+```javascript
+const redisAvailable = process.env.REDIS_HOST !== undefined;
 
-1. **Always cleanup test data** - Use try/finally blocks
-2. **Use unique identifiers** - Prevent test collisions
-3. **Mock external services** - Email, payments, etc.
-4. **Test realistic scenarios** - Mirror production workflows
-5. **Keep tests independent** - No test should depend on another
-6. **Validate tenant isolation** - Always test multi-tenancy
-7. **Handle async properly** - Use await, not callbacks
-8. **Log meaningful output** - Help debugging failures
-9. **Test error paths** - Not just happy paths
-10. **Keep tests fast** - Use parallelization where possible
+(redisAvailable ? it : it.skip)('should use Redis', async () => {
+  // Test using Redis
+});
+```
 
-## Monitoring & Metrics
+### Open Handles Warning
 
-Tests automatically track:
-- Total execution time
-- Individual test durations
-- Success/failure rates
-- API response times
-- Database query performance
+Ensure all connections are closed:
 
-## Security Considerations
+```javascript
+afterAll(async () => {
+  await cleanup.cleanup();
+  await prisma.$disconnect();
+});
+```
 
-- Test credentials are hardcoded (never use in production)
-- Test database is isolated from production
-- Stripe test mode keys only
-- No real emails sent in test environment
-- All test data is automatically deleted
+## Additional Resources
 
-## Support
-
-For issues or questions:
-1. Check test logs for detailed error messages
-2. Review service health endpoints
-3. Validate environment configuration
-4. Consult main application documentation
+- [Jest Documentation](https://jestjs.io/docs/getting-started)
+- [Prisma Testing Guide](https://www.prisma.io/docs/guides/testing)
+- [Supertest Documentation](https://github.com/visionmedia/supertest)
