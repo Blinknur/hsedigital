@@ -60,6 +60,11 @@ export const initializeSocketIO = (server) => {
             }
 
             const decoded = jwt.verify(token, JWT_SECRET);
+            
+            if (decoded.exp && decoded.exp * 1000 < Date.now()) {
+                return next(new Error('Token expired'));
+            }
+            
             socket.user = decoded;
             socket.tenantId = decoded.organizationId;
             socket.userId = decoded.id;

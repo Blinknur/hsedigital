@@ -15,7 +15,7 @@ import cookieParser from 'cookie-parser';
 import { requirePermission, requireRole, getUserPermissions, getUserRoles } from './middleware/rbac.js';
 import { securityHeaders, additionalSecurityHeaders } from './middleware/security.js';
 import { sanitizeRequest } from './middleware/sanitization.js';
-import { generateCSRFMiddleware } from './middleware/csrf.js';
+import { csrfProtection, generateCSRFMiddleware } from './middleware/csrf.js';
 import { auditLogger, auditLog, captureOriginalEntity } from './middleware/auditLog.js';
 import { tenantRateLimit, userRateLimit, ipRateLimit, authRateLimit } from './middleware/rateLimitRedis.js';
 import { 
@@ -134,6 +134,8 @@ app.use(express.json({ limit: '10mb' }));
 app.use(sanitizeRequest());
 
 app.use(generateCSRFMiddleware());
+
+app.use('/api/', csrfProtection());
 
 app.use('/api/', ipRateLimit);
 
@@ -436,16 +438,6 @@ app.post('/api/users', authenticateToken, ...tenantContextWithTracing, tenantRat
     });
     const { password: _, ...userInfo } = user;
     res.status(201).json(userInfo);
-}));
-
-app.post('/api/contractors', authenticateToken, ...tenantContextWithTracing, tenantRateLimit, requirePermission('contractors', 'write'), validateRequest(contractorSchema), requireQuota('contractors'), asyncHandler(async (req, res) => {
-    const contractor = await prisma.contractor.create({
-        data: {
-            organizationId: req.tenantId,
-            ...req.validatedData
-        }
-    });
-    res.status(201).json(contractor);
 }));
 
 // --- AI ---
