@@ -1,149 +1,134 @@
 # HSE.Digital - Compliance & Safety Platform
 
-HSE.Digital is a unified SaaS platform for managing audits, compliance checklists, incidents, and contractor permits for fuel station networks.
+Multi-tenant SaaS platform for managing audits, compliance checklists, incidents, and contractor permits for fuel station networks.
 
-## 🚀 Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js v18+
-- npm or yarn
 - Docker & Docker Compose
+- Node.js 18+ (for local development)
 
-### Quick Start with Docker (Recommended)
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd hse-digital-backend
-   ```
-
-2. **Configure environment variables**
-   ```bash
-   # Copy the local environment template
-   cp .env.local .env
-   
-   # Edit .env with your local configuration
-   # At minimum, update API_KEY for Gemini AI
-   ```
-
-3. **Start all services with Docker**
-   ```bash
-   npm run docker:up
-   ```
-
-   This will start:
-   - **App** (Node.js Backend + Frontend) on `http://localhost:3001`
-   - **PostgreSQL** database on `localhost:5432`
-   - **Redis** cache on `localhost:6379`
-   - **pgAdmin** database management on `http://localhost:5050`
-
-4. **Run database migrations**
-   ```bash
-   docker-compose exec app npx prisma db push
-   ```
-
-5. **Access the application**
-   - Main App: http://localhost:3001
-   - API Health: http://localhost:3001/api/health
-   - API Metrics: http://localhost:3001/metrics
-   - pgAdmin: http://localhost:5050 (login with credentials from .env)
-
-### Quick Start with Full Monitoring Stack
-
-For production-like monitoring setup with Prometheus, Grafana, and Loki:
+### Start Development Environment
 
 ```bash
-# Start full monitoring stack
-docker-compose -f docker-compose.monitoring.yml up -d
+# Clone and setup
+git clone <repository-url>
+cd hse-digital-backend
 
-# Access services
-open http://localhost:3001      # Application
-open http://localhost:3000      # Grafana (admin/admin123)
-open http://localhost:9090      # Prometheus
+# Configure environment
+cp .env.local .env
+# Edit .env and set JWT_SECRET and REFRESH_SECRET
+
+# Start all services
+npm run docker:up
+
+# Initialize database
+docker-compose exec app npx prisma db push
+
+# Access the application
+open http://localhost:3001
 ```
 
-See [server/MONITORING.md](server/MONITORING.md) for detailed monitoring documentation.
+That's it! The platform is now running with:
+- **App**: http://localhost:3001
+- **API Health**: http://localhost:3001/api/health
+- **pgAdmin**: http://localhost:5050 (admin@hse.digital / admin123)
 
-## 📊 Monitoring & Observability
+## 📖 Documentation
 
-This platform includes comprehensive monitoring and observability:
+Complete documentation is available in the [`/docs`](./docs) directory:
 
-- **Structured JSON Logging**: Pino with automatic PII redaction
-- **Health Check Endpoints**: `/api/health`, `/api/ready`, `/api/live`
-- **Prometheus Metrics**: `/metrics` endpoint for scraping
-- **Error Tracking**: Sentry integration (optional)
-- **Performance Monitoring**: Slow query detection and tracking
-- **Alerting**: Slack and PagerDuty integration
-- **Dashboards**: Pre-built Grafana dashboards
+### For Developers
+- **[Quick Start Guide](./docs/deployment/quick-start.md)** - Get started in 5 minutes
+- **[API Reference](./docs/api/endpoints.md)** - Complete REST API documentation
+- **[Architecture Overview](./docs/architecture/overview.md)** - System design and patterns
 
-**Key Monitoring Endpoints**:
-- `GET /api/health` - Complete health status with DB/Redis checks
-- `GET /api/ready` - Kubernetes readiness probe
-- `GET /api/live` - Kubernetes liveness probe
-- `GET /metrics` - Prometheus metrics export
+### For DevOps
+- **[Docker Setup](./docs/deployment/docker.md)** - Local development environment
+- **[Production Deployment](./docs/deployment/production.md)** - Deploy to production
+- **[Monitoring Guide](./docs/monitoring/overview.md)** - Observability setup
 
-**Documentation**: See [server/MONITORING.md](server/MONITORING.md) for complete guide.
+### Key Features
+- **[Report Generation](./docs/features/reports.md)** - PDF reports with charts
+- **[WebSocket Notifications](./docs/features/websockets.md)** - Real-time updates
+- **[Queue System](./docs/features/queue-system.md)** - Background job processing
+- **[Multi-Tenancy](./docs/architecture/multi-tenancy.md)** - Tenant isolation
+- **[Security](./docs/security/overview.md)** - Security implementation
+
+### Browse All Documentation
+**[📚 Complete Documentation Index](./docs/README.md)**
 
 ## 🏗️ Architecture
 
-- **Multi-tenant SaaS**: Organization-based isolation
-- **REST API**: Express.js with middleware-based request processing
-- **Database**: PostgreSQL 15 with Prisma ORM
-- **Cache**: Redis 7 for rate limiting and sessions
-- **Authentication**: JWT with role-based access control (RBAC)
-- **Security**: Helmet, rate limiting, CSRF protection, input sanitization
-- **Monitoring**: Pino logging, Prometheus metrics, Sentry errors
-
-## 🔐 Security Features
-
-- **Row-Level Security (RLS)**: Database-level tenant isolation
-- **RBAC**: Fine-grained permission system
-- **Rate Limiting**: Redis-based per-tenant, per-user, and IP-based
-- **CSRF Protection**: Token-based protection for state-changing operations
-- **Input Sanitization**: XSS and SQL injection prevention
-- **Audit Logging**: All sensitive operations logged
-- **JWT Authentication**: Secure token-based auth with refresh tokens
-
-## 📦 Tech Stack
-
-- **Backend**: Node.js 18+, Express.js
-- **Database**: PostgreSQL 15 (with Prisma ORM)
+**Multi-tenant SaaS** with organization-based data isolation:
+- **Backend**: Node.js 18, Express.js
+- **Database**: PostgreSQL 15 (Prisma ORM)
 - **Cache**: Redis 7
+- **Queue**: Bull with Bull Board
 - **Frontend**: React + Vite + TypeScript
-- **Authentication**: JWT with bcrypt
-- **Monitoring**: Pino (logs), Prometheus (metrics), Sentry (errors), Grafana (dashboards)
-- **Containerization**: Docker + Docker Compose
-- **Security**: Helmet, express-rate-limit, CORS, CSRF protection
+- **Auth**: JWT with RBAC
+- **Monitoring**: Pino, Prometheus, Sentry, OpenTelemetry, Grafana
 
-## 📖 API Documentation
+## 🔧 Common Commands
 
-Comprehensive API documentation available in [API_DOCUMENTATION.md](API_DOCUMENTATION.md).
+```bash
+# Docker management
+npm run docker:up          # Start all services
+npm run docker:down        # Stop all services
+npm run docker:logs:app    # View application logs
+npm run docker:restart     # Restart services
 
-### Core Endpoints
+# Database
+docker-compose exec app npx prisma db push    # Apply schema changes
+docker-compose exec app npx prisma studio     # Open Prisma Studio
 
-**Authentication**:
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - Login with credentials
-- `POST /api/auth/refresh` - Refresh access token
+# Testing
+docker-compose exec app npm test              # Run tests
 
-**Monitoring**:
-- `GET /api/health` - Health check
-- `GET /api/ready` - Readiness probe
-- `GET /api/live` - Liveness probe
-- `GET /metrics` - Prometheus metrics
-
-**Resources** (authenticated):
-- Stations: `/api/stations`
-- Audits: `/api/audits`
-- Incidents: `/api/incidents`
-- Work Permits: `/api/work-permits`
-- Contractors: `/api/contractors`
-
-All authenticated endpoints require:
+# View health status
+curl http://localhost:3001/api/health
 ```
-Authorization: Bearer <jwt-token>
-x-tenant-id: <organization-id>
-```
+
+See **[AGENTS.md](./AGENTS.md)** for complete command reference.
+
+## 📊 Core Features
+
+### Authentication & Authorization
+- JWT-based authentication with refresh tokens
+- Role-based access control (RBAC)
+- Multi-tenant isolation
+- Email verification
+
+### Compliance Management
+- Station audits and inspections
+- Incident reporting and tracking
+- Work permit management
+- Contractor management
+
+### Reporting & Analytics
+- PDF report generation with charts
+- Scheduled report delivery
+- Custom report templates
+- Export capabilities
+
+### Real-time Features
+- WebSocket notifications
+- Live audit status updates
+- Real-time incident alerts
+
+### Security
+- Row-level security (RLS)
+- CSRF protection
+- Rate limiting (Redis-based)
+- Input validation and sanitization
+- Security audit logging
+
+### Monitoring & Observability
+- Structured JSON logging (Pino)
+- Prometheus metrics
+- Sentry error tracking
+- OpenTelemetry tracing
+- Health check endpoints
 
 ## 🧪 Testing
 
@@ -152,138 +137,98 @@ x-tenant-id: <organization-id>
 cd server && npm test
 
 # Run specific test suite
-npm run test:tenant
-npm run test:tenant:integration
+docker-compose exec app npm test -- test-name.js
 ```
 
-## 🚢 Deployment
+## 🌍 Environment Variables
 
-### Docker Production Build
-
-```bash
-# Build production image
-docker build -t hse-digital:latest .
-
-# Or with docker-compose
-npm run docker:build
-```
-
-### Environment Variables
-
-Required environment variables for production:
+Required environment variables:
 
 ```bash
 # Database
 DATABASE_URL=postgresql://user:pass@host:5432/database
 
-# JWT Secrets (MUST CHANGE IN PRODUCTION)
+# JWT Secrets (REQUIRED)
 JWT_SECRET=your-secure-secret
 REFRESH_SECRET=your-secure-refresh-secret
 
 # Redis
-REDIS_HOST=redis-host
+REDIS_HOST=redis
 REDIS_PORT=6379
-REDIS_PASSWORD=your-redis-password
 
-# Monitoring (Optional but Recommended)
+# Monitoring (Optional)
 SENTRY_DSN=https://your-sentry-dsn
-LOG_LEVEL=info
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK
-
-# See server/.env.example for complete list
 ```
 
-### Kubernetes Deployment
+See [.env.example](./server/.env.example) for complete configuration.
 
-The application includes health check endpoints for Kubernetes:
+## 🚢 Deployment
 
-```yaml
-livenessProbe:
-  httpGet:
-    path: /api/live
-    port: 3001
-  initialDelaySeconds: 30
-  periodSeconds: 10
-
-readinessProbe:
-  httpGet:
-    path: /api/ready
-    port: 3001
-  initialDelaySeconds: 10
-  periodSeconds: 5
-```
-
-## 📚 Documentation
-
-- [API Documentation](API_DOCUMENTATION.md)
-- [Monitoring & Observability](server/MONITORING.md)
-- [Security Guide](server/SECURITY.md)
-- [Tenant Architecture](server/TENANT_ARCHITECTURE.md)
-- [Docker Setup](DOCKER_SETUP.md)
-- [Agent Guide](AGENTS.md)
-
-## 🛠️ Development
-
-### Local Development
-
+### Docker Production Build
 ```bash
-# Install dependencies
-cd server && npm install
-
-# Copy environment file
-cp .env.example .env
-
-# Start development server
-npm run dev
+docker build -t hse-digital:latest .
 ```
 
-### Docker Management Commands
+### Kubernetes
+Health check endpoints for Kubernetes:
+- **Liveness**: `/api/live`
+- **Readiness**: `/api/ready`
+- **Health**: `/api/health`
 
+See **[Production Deployment Guide](./docs/deployment/production.md)** for details.
+
+## 🔐 Security
+
+This platform implements comprehensive security measures:
+- Input validation (Zod schemas)
+- SQL injection prevention
+- CSRF protection
+- XSS prevention
+- Rate limiting
+- Security headers (Helmet)
+- Audit logging
+
+See **[Security Documentation](./docs/security/overview.md)** for details.
+
+## 📝 API Documentation
+
+### Authentication
 ```bash
-npm run docker:up          # Start all services
-npm run docker:down        # Stop all services
-npm run docker:logs        # View all logs
-npm run docker:logs:app    # View app logs
-npm run docker:logs:db     # View database logs
-npm run docker:logs:redis  # View Redis logs
-npm run docker:build       # Rebuild containers
-npm run docker:restart     # Restart services
-npm run docker:clean       # Clean all volumes
-npm run docker:ps          # List containers
+POST /api/auth/signup-with-org    # Create organization + owner
+POST /api/auth/login               # Login
+POST /api/auth/refresh             # Refresh token
 ```
 
-### Database Management
-
+### Core Resources
 ```bash
-# Generate Prisma client
-npm run prisma:generate
-
-# Push schema to database
-npm run prisma:push
-
-# Run migrations
-npm run prisma:migrate
-
-# Seed database
-npm run seed
+GET    /api/stations               # List stations
+GET    /api/audits                 # List audits
+GET    /api/incidents              # List incidents
+GET    /api/work-permits           # List work permits
 ```
+
+All authenticated endpoints require:
+```
+Authorization: Bearer <jwt-token>
+x-tenant-id: <organization-id>
+```
+
+See **[API Documentation](./docs/api/endpoints.md)** for complete reference.
 
 ## 🤝 Contributing
 
-1. Follow existing code style and conventions
+1. Follow existing code conventions
 2. Write tests for new features
-3. Update documentation as needed
-4. Use conventional commit messages
+3. Update documentation
+4. Keep commits focused and clear
 
 ## 📄 License
 
 Proprietary - All rights reserved
 
-## 🔗 Resources
+## 📞 Support
 
-- [Prisma Documentation](https://www.prisma.io/docs)
-- [Express.js Guide](https://expressjs.com/)
-- [Docker Documentation](https://docs.docker.com/)
-- [Prometheus Documentation](https://prometheus.io/docs/)
-- [Grafana Documentation](https://grafana.com/docs/)
-- [Sentry Documentation](https://docs.sentry.io/)
+- Documentation: [/docs](./docs)
+- Developer Guide: [AGENTS.md](./AGENTS.md)
+- Security Issues: security@hse.digital
