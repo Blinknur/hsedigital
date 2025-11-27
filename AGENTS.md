@@ -38,11 +38,25 @@ npm run lint
 
 **Test:**
 ```bash
-# Run tests in Docker
-docker-compose -f docker/docker-compose.yml exec app npm test
+# RECOMMENDED: Run tests in Docker test environment
+npm test                             # Run all tests (uses Docker)
+npm run test:docker                  # Explicitly use Docker
+npm run test:unit                    # Unit tests only
+npm run test:integration             # Integration tests only
+npm run test:regression              # Regression tests
 
-# Local tests (requires dependencies)
-cd server && npm test
+# Test environment management
+npm run test:setup                   # Start test environment
+npm run test:stop                    # Stop test environment
+npm run test:logs                    # View test logs
+
+# Alternative: Local tests (requires local PostgreSQL + Redis)
+npm run test:local                   # cd server && npm test
+
+# Using script directly
+./scripts/run-tests.sh docker        # Run all tests
+./scripts/run-tests.sh unit          # Unit tests only
+./scripts/run-tests.sh help          # Show all options
 
 # Quick syntax check
 cd server && npm run lint
