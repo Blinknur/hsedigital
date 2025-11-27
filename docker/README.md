@@ -126,6 +126,10 @@ docker-compose -f docker/docker-compose.yml up -d
 ```
 
 **Recent Changes:**
+- *Nov 2024*: **OpenSSL 3.x Compatibility Fix** - Upgraded from `node:18-alpine` to `node:20-alpine` and added explicit OpenSSL package installation to resolve Prisma binary compatibility issues with Alpine Linux's minimal OpenSSL libraries. This eliminates libssl detection warnings during container startup.
+  - Builder stage: Added `RUN apk add --no-cache openssl-dev` for Prisma compilation
+  - Production stage: Added `RUN apk add --no-cache openssl` for Prisma runtime
+  - Node.js 20 provides better OpenSSL 3.x compatibility out of the box
 - *Nov 2024*: Fixed build failure when frontend dependencies missing. The Dockerfile now creates an empty `dist` directory if the frontend build fails, preventing COPY errors.
 
 ## Quick Start
