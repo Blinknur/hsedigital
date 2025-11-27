@@ -97,7 +97,8 @@ Multi-stage build optimized for production:
 **Stage 1 (builder):**
 - Install all dependencies
 - Generate Prisma client
-- Build frontend with source maps
+- Build frontend with source maps (if Vite available)
+- Create dist directory (ensures COPY operations succeed)
 
 **Stage 2 (production):**
 - Install production dependencies only
@@ -110,6 +111,22 @@ Multi-stage build optimized for production:
 cd ..
 docker build -f docker/Dockerfile -t hse-digital:latest .
 ```
+
+**Rebuild containers after Dockerfile changes:**
+```bash
+# Test environment
+docker-compose -f docker/docker-compose.test.yml down
+docker-compose -f docker/docker-compose.test.yml build --no-cache
+docker-compose -f docker/docker-compose.test.yml up -d
+
+# Main environment
+docker-compose -f docker/docker-compose.yml down
+docker-compose -f docker/docker-compose.yml build --no-cache
+docker-compose -f docker/docker-compose.yml up -d
+```
+
+**Recent Changes:**
+- *Nov 2024*: Fixed build failure when frontend dependencies missing. The Dockerfile now creates an empty `dist` directory if the frontend build fails, preventing COPY errors.
 
 ## Quick Start
 

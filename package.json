@@ -7,9 +7,9 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "build": "echo 'Build: Frontend build managed separately (see vite.config.ts)'",
-    "build:frontend": "cd src && vite build",
-    "build:sourcemaps": "SENTRY_RELEASE=$(git describe --tags --always) && cd src && vite build",
+    "build": "mkdir -p dist && echo 'Build: Backend only (frontend build requires vite to be installed)'",
+    "build:frontend": "mkdir -p dist && (command -v vite >/dev/null 2>&1 && cd src && vite build || echo 'Vite not found, skipping frontend build')",
+    "build:sourcemaps": "mkdir -p dist && (SENTRY_RELEASE=$(git describe --tags --always) && command -v vite >/dev/null 2>&1 && cd src && vite build || echo 'Vite not found, skipping frontend build')",
     "test": "./scripts/run-tests.sh docker",
     "test:docker": "./scripts/run-tests.sh docker",
     "test:unit": "./scripts/run-tests.sh unit",

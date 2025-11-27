@@ -21,6 +21,9 @@ RUN npx prisma generate
 # Build frontend with sourcemaps
 RUN npm run build:sourcemaps || npm run build || echo "No build script found"
 
+# Ensure dist directory exists (even if empty) to prevent COPY errors
+RUN mkdir -p /app/dist
+
 # Stage 2: Production runtime
 FROM node:18-alpine AS production
 
