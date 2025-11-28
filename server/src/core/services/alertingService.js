@@ -1,6 +1,7 @@
 import { logger } from '../../shared/utils/logger.js';
 import { sendAlert } from './emailService.js';
 import Redis from 'ioredis';
+import { incidentResponseService } from './incidentResponseService.js';
 
 const redis = new Redis({
     host: process.env.REDIS_HOST || 'localhost',
@@ -186,6 +187,21 @@ class AdvancedAlertingService {
             metadata,
             tenantId
         }, `ALERT [${severity}]: ${title}`);
+
+        if (severity === 'CRITICAL' || severity === 'ERROR') {
+            try {
+                await incidentResponseService.handleCriticalAlert(type, {
+                    severity,
+                    title,
+                    message,
+                    metadata,
+                    tenantId,
+                    timestamp: new Date().toISOString()
+                });
+            } catch (error) {
+                logger.error({ error }, 'Failed to trigger incident response');
+            }
+        }
 
         const alertPromises = [];
 

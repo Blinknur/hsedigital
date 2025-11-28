@@ -93,3 +93,7 @@ grype-results.*
 
 # Docker metrics (baseline.json should be tracked)
 # .docker-metrics/ directory is tracked for baseline tracking
+
+# Incident Response Diagnostics
+data/diagnostics/
+*.heapsnapshot
