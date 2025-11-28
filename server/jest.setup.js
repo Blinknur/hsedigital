@@ -2,6 +2,7 @@ import { jest } from '@jest/globals';
 
 jest.setTimeout(30000);
 
+const originalError = console.error;
 global.console = {
   ...console,
   error: jest.fn((...args) => {
@@ -12,7 +13,7 @@ global.console = {
     ) {
       return;
     }
-    console.error(...args);
+    originalError(...args);
   }),
 };
 

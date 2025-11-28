@@ -1,7 +1,5 @@
 import { setUserContext, setTenantContext, addBreadcrumb, setRequestContext, customFingerprint, setFingerprint } from '../../shared/utils/sentry.js';
-import { createInstrumentedPrismaClient } from '../../shared/utils/prisma-instrumented.js';
-
-const prisma = createInstrumentedPrismaClient();
+import prisma from '../../shared/utils/db.js';
 
 export const sentryContextMiddleware = async (req, res, next) => {
   try {
