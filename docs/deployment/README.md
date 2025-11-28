@@ -5,12 +5,11 @@ Deployment guides, operations, and infrastructure documentation.
 ## Documents
 
 ### Getting Started
-- **[Quick Start](./quick-start.md)** - Get started in 5 minutes
+- **[Quick Start](./quick-start.md)** - Get started quickly
 - **[Setup Guide](./setup-guide.md)** - Complete setup instructions
-- **[Docker Setup](./docker.md)** - Local development with Docker
 
 ### Production
-- **[Production Deployment](./production.md)** - Production deployment guide
+- **[Production Deployment](./production.md)** - Production deployment guide (Kubernetes)
 - **[Deployment Runbook](./runbook.md)** - Step-by-step deployment procedures
 - **[Load Testing](./load-testing.md)** - Load testing and performance validation
 
@@ -30,15 +29,26 @@ Deployment guides, operations, and infrastructure documentation.
 git clone <repository-url>
 cd hse-digital-backend
 
-# Configure environment
-cp .env.local .env
-# Edit .env: Set JWT_SECRET and REFRESH_SECRET
+# Install dependencies
+npm install
+cd server && npm install
 
-# Start services
-npm run docker:up
+# Configure environment
+cp server/.env.example server/.env
+# Edit .env: Set required variables
+# - DATABASE_URL
+# - JWT_SECRET
+# - REFRESH_SECRET
+# - REDIS_HOST
+# - REDIS_PORT
 
 # Initialize database
-docker-compose exec app npx prisma db push
+cd server
+npx prisma generate
+npx prisma db push
+
+# Start development server
+npm run dev
 
 # Access application
 open http://localhost:3001
@@ -47,10 +57,10 @@ open http://localhost:3001
 ## Production Deployment
 
 ### Prerequisites
-- Docker & Docker Compose (or Kubernetes)
+- Node.js 18+
 - PostgreSQL 15+
 - Redis 7+
-- Node.js 18+ (for builds)
+- Kubernetes/EKS cluster (for production)
 
 ### Environment Variables
 Required for production:
@@ -67,17 +77,21 @@ REDIS_PORT=6379
 - **Readiness**: `GET /api/ready`
 - **Health**: `GET /api/health`
 
-## Docker Commands
+## Development Commands
 
 ```bash
-# Development
-npm run docker:up              # Start all services
-npm run docker:down            # Stop services
-npm run docker:logs:app        # View logs
+# Start server
+npm run dev                    # Development mode
+npm start                      # Production mode
 
-# Production
-docker build -t hse-digital:latest .
-docker-compose -f docker-compose.prod.yml up -d
+# Database
+npx prisma generate            # Generate Prisma client
+npx prisma db push             # Apply schema changes
+
+# Testing
+npm test                       # Run all tests
+npm run test:unit              # Unit tests
+npm run test:integration       # Integration tests
 ```
 
 ## Quick Links

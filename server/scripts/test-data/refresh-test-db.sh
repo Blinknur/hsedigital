@@ -12,9 +12,9 @@ echo "🔄 HSE Digital - Test Data Refresh"
 echo "==================================="
 echo ""
 
-# Check if we're running in Docker
+# Check if we're running in a container
 if [ -f /.dockerenv ]; then
-    echo "📦 Running in Docker container"
+    echo "📦 Running in container"
     NODE_ENV=test node "$SERVER_DIR/tests/seeders/refresh-test-data.js"
 else
     echo "💻 Running locally"

@@ -21,10 +21,9 @@ API documentation and integration guides
 
 ### [Deployment](./deployment/)
 Deployment guides and operations
-- [Quick Start](./deployment/quick-start.md) - Get started in 5 minutes
+- [Quick Start](./deployment/quick-start.md) - Get started quickly
 - [Setup Guide](./deployment/setup-guide.md) - Complete setup instructions
-- [Docker Setup](./deployment/docker.md) - Local development with Docker
-- [Production Deployment](./deployment/production.md) - Production deployment guide
+- [Production Deployment](./deployment/production.md) - Production deployment guide (Kubernetes)
 - [Deployment Runbook](./deployment/runbook.md) - Step-by-step deployment procedures
 - [Multi-Region Setup](./deployment/multi-region.md) - Multi-region deployment guide
 - [Multi-Region Runbook](./deployment/multi-region-runbook.md) - Multi-region operations
@@ -67,8 +66,7 @@ Feature-specific documentation
 ## 🚀 Quick Links
 
 ### Getting Started
-- [Quick Start Guide](./deployment/quick-start.md) - Start developing in 5 minutes
-- [Docker Setup](./deployment/docker.md) - Local development environment
+- [Quick Start Guide](./deployment/quick-start.md) - Start developing quickly
 - [API Documentation](./api/endpoints.md) - API reference
 
 ### For Developers
@@ -89,7 +87,6 @@ Feature-specific documentation
 ## 📋 Prerequisites
 
 - Node.js 18+
-- Docker & Docker Compose
 - PostgreSQL 15+
 - Redis 7+
 
@@ -102,7 +99,7 @@ Feature-specific documentation
 - **Frontend**: React, Vite, TypeScript
 - **Auth**: JWT with bcrypt
 - **Monitoring**: Pino, Prometheus, Sentry, OpenTelemetry, Grafana
-- **Container**: Docker, Docker Compose
+- **Deployment**: Kubernetes/EKS
 
 ## 📖 Additional Resources
 

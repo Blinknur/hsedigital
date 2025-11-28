@@ -5,8 +5,9 @@ Multi-tenant SaaS platform for managing audits, compliance checklists, incidents
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Docker & Docker Compose
-- Node.js 18+ (for local development)
+- Node.js 18+
+- PostgreSQL 15+
+- Redis 7+
 
 ### Start Development Environment
 
@@ -15,37 +16,42 @@ Multi-tenant SaaS platform for managing audits, compliance checklists, incidents
 git clone <repository-url>
 cd hse-digital-backend
 
-# Configure environment
-cp .env.local .env
-# Edit .env and set JWT_SECRET and REFRESH_SECRET
+# Install dependencies
+npm install
+cd server && npm install
 
-# Start all services
-npm run docker:up
+# Configure environment
+cp .env.example .env
+# Edit .env and set required variables:
+# - DATABASE_URL
+# - JWT_SECRET
+# - REFRESH_SECRET
+# - REDIS_HOST
+# - REDIS_PORT
 
 # Initialize database
-docker-compose exec app npx prisma db push
+npx prisma generate
+npx prisma db push
 
-# Access the application
-open http://localhost:3001
+# Start the server
+npm run dev
 ```
 
-That's it! The platform is now running with:
+The platform is now running at:
 - **App**: http://localhost:3001
 - **API Health**: http://localhost:3001/api/health
-- **pgAdmin**: http://localhost:5050 (admin@hse.digital / admin123)
 
 ## 📖 Documentation
 
 Complete documentation is available in the [`/docs`](./docs) directory:
 
 ### For Developers
-- **[Quick Start Guide](./docs/deployment/quick-start.md)** - Get started in 5 minutes
+- **[Quick Start Guide](./docs/deployment/quick-start.md)** - Get started quickly
 - **[API Reference](./docs/api/endpoints.md)** - Complete REST API documentation
 - **[Architecture Overview](./docs/architecture/overview.md)** - System design and patterns
 
 ### For DevOps
-- **[Docker Setup](./docs/deployment/docker.md)** - Local development environment
-- **[Production Deployment](./docs/deployment/production.md)** - Deploy to production
+- **[Production Deployment](./docs/deployment/production.md)** - Deploy to production (Kubernetes)
 - **[Monitoring Guide](./docs/monitoring/overview.md)** - Observability setup
 
 ### Key Features
@@ -72,18 +78,19 @@ Complete documentation is available in the [`/docs`](./docs) directory:
 ## 🔧 Common Commands
 
 ```bash
-# Docker management
-npm run docker:up          # Start all services
-npm run docker:down        # Stop all services
-npm run docker:logs:app    # View application logs
-npm run docker:restart     # Restart services
+# Development
+npm run dev                # Start development server
+npm start                  # Start production server
 
 # Database
-docker-compose exec app npx prisma db push    # Apply schema changes
-docker-compose exec app npx prisma studio     # Open Prisma Studio
+npx prisma generate        # Generate Prisma client
+npx prisma db push         # Apply schema changes
+npx prisma studio          # Open Prisma Studio
 
 # Testing
-docker-compose exec app npm test              # Run tests
+npm test                   # Run all tests
+npm run test:unit          # Run unit tests
+npm run test:integration   # Run integration tests
 
 # View health status
 curl http://localhost:3001/api/health
@@ -134,10 +141,11 @@ See **[AGENTS.md](./AGENTS.md)** for complete command reference.
 
 ```bash
 # Run all tests
-cd server && npm test
+npm test
 
 # Run specific test suite
-docker-compose exec app npm test -- test-name.js
+npm run test:unit
+npm run test:integration
 ```
 
 ## 🌍 Environment Variables
@@ -146,14 +154,14 @@ Required environment variables:
 
 ```bash
 # Database
-DATABASE_URL=postgresql://user:pass@host:5432/database
+DATABASE_URL=postgresql://user:pass@localhost:5432/database
 
 # JWT Secrets (REQUIRED)
 JWT_SECRET=your-secure-secret
 REFRESH_SECRET=your-secure-refresh-secret
 
 # Redis
-REDIS_HOST=redis
+REDIS_HOST=localhost
 REDIS_PORT=6379
 
 # Monitoring (Optional)
@@ -161,22 +169,18 @@ SENTRY_DSN=https://your-sentry-dsn
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK
 ```
 
-See [.env.example](./server/.env.example) for complete configuration.
+See [server/.env.example](./server/.env.example) for complete configuration.
 
 ## 🚢 Deployment
 
-### Docker Production Build
-```bash
-docker build -t hse-digital:latest .
-```
+### Production Deployment
+The application is deployed to Kubernetes/EKS for production. See the **[Production Deployment Guide](./docs/deployment/production.md)** for complete instructions.
 
-### Kubernetes
-Health check endpoints for Kubernetes:
+### Health Check Endpoints
+For container orchestration platforms:
 - **Liveness**: `/api/live`
 - **Readiness**: `/api/ready`
 - **Health**: `/api/health`
-
-See **[Production Deployment Guide](./docs/deployment/production.md)** for details.
 
 ## 🔐 Security
 

@@ -49,10 +49,6 @@ check_dependencies() {
         missing_deps+=("psql")
     fi
     
-    if ! command -v docker &> /dev/null; then
-        missing_deps+=("docker")
-    fi
-    
     if ! command -v jq &> /dev/null; then
         missing_deps+=("jq")
     fi
@@ -64,13 +60,7 @@ check_dependencies() {
 }
 
 get_db_connection() {
-    if [ "$USE_DOCKER" = true ]; then
-        PGHOST="$DOCKER_CONTAINER"
-        DOCKER_EXEC="docker exec -i $DOCKER_CONTAINER"
-    else
-        PGHOST="$DB_HOST"
-        DOCKER_EXEC=""
-    fi
+    PGHOST="$DB_HOST"
 }
 
 verify_backup_integrity() {
@@ -106,11 +96,7 @@ create_pre_restore_backup() {
     
     local pre_restore_backup="$BACKUP_DIR/pre-restore-$(date +%Y%m%d-%H%M%S).sql.gz"
     
-    if [ "$USE_DOCKER" = true ]; then
-        docker exec -i "$DOCKER_CONTAINER" pg_dump -U "$DB_USER" -d "$DB_NAME" --format=custom --compress=9 2>> "$LOG_FILE" | gzip > "$pre_restore_backup"
-    else
-        PGPASSWORD="$DB_PASSWORD" pg_dump -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" --format=custom --compress=9 2>> "$LOG_FILE" | gzip > "$pre_restore_backup"
-    fi
+    PGPASSWORD="$DB_PASSWORD" pg_dump -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" --format=custom --compress=9 2>> "$LOG_FILE" | gzip > "$pre_restore_backup"
     
     if [ $? -eq 0 ]; then
         log "Pre-restore backup created: $pre_restore_backup"
@@ -128,11 +114,7 @@ terminate_connections() {
     
     local terminate_sql="SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$target_db' AND pid <> pg_backend_pid();"
     
-    if [ "$USE_DOCKER" = true ]; then
-        docker exec -i "$DOCKER_CONTAINER" psql -U "$DB_USER" -d postgres -c "$terminate_sql" 2>> "$LOG_FILE"
-    else
-        PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -c "$terminate_sql" 2>> "$LOG_FILE"
-    fi
+    PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -c "$terminate_sql" 2>> "$LOG_FILE"
     
     sleep 2
 }
@@ -145,15 +127,9 @@ restore_full_backup() {
     
     terminate_connections "$target_db"
     
-    if [ "$USE_DOCKER" = true ]; then
-        docker exec -i "$DOCKER_CONTAINER" psql -U "$DB_USER" -d postgres -c "DROP DATABASE IF EXISTS $target_db;" 2>> "$LOG_FILE"
-        docker exec -i "$DOCKER_CONTAINER" psql -U "$DB_USER" -d postgres -c "CREATE DATABASE $target_db;" 2>> "$LOG_FILE"
-        gunzip -c "$backup_file" | docker exec -i "$DOCKER_CONTAINER" pg_restore -U "$DB_USER" -d "$target_db" --verbose --no-owner --no-acl 2>> "$LOG_FILE"
-    else
-        PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -c "DROP DATABASE IF EXISTS $target_db;" 2>> "$LOG_FILE"
-        PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -c "CREATE DATABASE $target_db;" 2>> "$LOG_FILE"
-        gunzip -c "$backup_file" | PGPASSWORD="$DB_PASSWORD" pg_restore -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$target_db" --verbose --no-owner --no-acl 2>> "$LOG_FILE"
-    fi
+    PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -c "DROP DATABASE IF EXISTS $target_db;" 2>> "$LOG_FILE"
+    PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -c "CREATE DATABASE $target_db;" 2>> "$LOG_FILE"
+    gunzip -c "$backup_file" | PGPASSWORD="$DB_PASSWORD" pg_restore -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$target_db" --verbose --no-owner --no-acl 2>> "$LOG_FILE"
     
     if [ $? -eq 0 ]; then
         log "Full restore completed"
@@ -172,13 +148,8 @@ restore_tenant_backup() {
     
     local cleanup_sql="DELETE FROM \"Audit\" WHERE \"organizationId\" = '$tenant_id'; DELETE FROM \"Station\" WHERE \"organizationId\" = '$tenant_id'; DELETE FROM \"User\" WHERE \"organizationId\" = '$tenant_id'; DELETE FROM \"Organization\" WHERE id = '$tenant_id';"
     
-    if [ "$USE_DOCKER" = true ]; then
-        echo "$cleanup_sql" | docker exec -i "$DOCKER_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" 2>> "$LOG_FILE"
-        gunzip -c "$backup_file" | docker exec -i "$DOCKER_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" 2>> "$LOG_FILE"
-    else
-        echo "$cleanup_sql" | PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" 2>> "$LOG_FILE"
-        gunzip -c "$backup_file" | PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" 2>> "$LOG_FILE"
-    fi
+    echo "$cleanup_sql" | PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" 2>> "$LOG_FILE"
+    gunzip -c "$backup_file" | PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" 2>> "$LOG_FILE"
     
     if [ $? -eq 0 ]; then
         log "Tenant restore completed"

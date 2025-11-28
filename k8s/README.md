@@ -73,15 +73,14 @@ bash k8s/validation/validate-deployment.sh hse-production latest production
 The deployment pipeline is automated via GitHub Actions:
 - **File**: `.github/workflows/k8s-deploy-validation.yml`
 - **Triggers**: Push to `staging` or `main` branches
-- **Features**: Build, deploy, validate, rollback on failure
+- **Features**: Deploy, validate, rollback on failure
 
 ### Pipeline Flow
 
-1. **Build**: Docker image creation and push to registry
-2. **Deploy**: Kubernetes manifest application
-3. **Validate**: Smoke tests + health checks
-4. **Monitor**: Sentry + Prometheus integration
-5. **Rollback**: Automatic if validation fails
+1. **Deploy**: Kubernetes manifest application
+2. **Validate**: Smoke tests + health checks
+3. **Monitor**: Sentry + Prometheus integration
+4. **Rollback**: Automatic if validation fails
 
 ## Smoke Tests
 
@@ -352,9 +351,8 @@ Required in repository settings:
 
 ## Documentation
 
-- **Production Runbook**: `docs/deployment/PRODUCTION_DEPLOYMENT_RUNBOOK.md`
+- **Production Runbook**: `docs/deployment/runbook.md`
 - **General Deployment**: `docs/deployment/production.md`
-- **Docker Setup**: `docs/deployment/docker.md`
 - **Architecture**: `docs/architecture/overview.md`
 
 ## Support

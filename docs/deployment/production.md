@@ -29,7 +29,6 @@ GitOps-based deployment using GitHub Actions CI/CD with Kubernetes orchestration
 - kustomize
 - AWS CLI
 - Helm 3
-- Docker
 
 ### Access Required
 - AWS/EKS cluster admin
@@ -108,21 +107,17 @@ git checkout main && git merge staging && git push origin main
 ### Manual Deployment
 
 ```bash
-# 1. Build and push
-docker build -t ghcr.io/your-org/hse-digital:v1.0.0 .
-docker push ghcr.io/your-org/hse-digital:v1.0.0
-
-# 2. Deploy
+# 1. Deploy
 kubectl apply -k k8s/overlays/production
 
-# 3. Monitor
+# 2. Monitor
 kubectl rollout status deployment/prod-hse-app -n hse-production
 
-# 4. Run migrations
+# 3. Run migrations
 kubectl apply -f k8s/base/migration-job.yaml -n hse-production
 kubectl wait --for=condition=complete --timeout=10m job/db-migration -n hse-production
 
-# 5. Verify
+# 4. Verify
 kubectl get pods,svc,ingress -n hse-production
 curl http://localhost:8080/api/health
 ```

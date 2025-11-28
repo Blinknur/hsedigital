@@ -43,7 +43,7 @@ curl -H "Authorization: Bearer $TOKEN" https://api.hse.com/api/backup/health
 # Create pre-deployment backup
 VERSION="v1.5.0"
 BACKUP="pre-deploy-${VERSION}-$(date +%Y%m%d-%H%M%S)"
-docker-compose exec postgres pg_dump -U hse_admin -d hse_platform | gzip > "/var/backups/hse-digital/deployments/${BACKUP}.sql.gz"
+kubectl exec postgres-0 -n hse-production -- pg_dump -U hse_admin -d hse_platform | gzip > "/var/backups/hse-digital/deployments/${BACKUP}.sql.gz"
 
 # Verify and upload
 gzip -t "/var/backups/hse-digital/deployments/${BACKUP}.sql.gz"

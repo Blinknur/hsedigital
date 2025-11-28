@@ -4,59 +4,47 @@
 
 **Setup:**
 ```bash
-# Local development
+# Install dependencies
 npm install
 cd server && npm install
 
 # Copy environment template
-cp config/environments/.env.development .env
+cp server/.env.example server/.env
 
 # IMPORTANT: Configure required environment variables in .env:
+# - DATABASE_URL (required) - PostgreSQL connection string
 # - JWT_SECRET (required) - Secret key for JWT access tokens
 # - REFRESH_SECRET (required) - Secret key for JWT refresh tokens
+# - REDIS_HOST (required) - Redis host
+# - REDIS_PORT (required) - Redis port
 # The server will not start without these variables configured.
 
-# Docker setup (recommended)
-npm run docker:up
-docker-compose -f docker/docker-compose.yml exec app npx prisma db push
+# Generate Prisma client and setup database
+cd server
+npx prisma generate
+npx prisma db push
 ```
 
 **Build:**
 ```bash
-# Docker production build
-docker build -f docker/Dockerfile -t hse-digital:latest .
-
-# Or with docker-compose
-npm run docker:build
+# No build step required for Node.js backend
+npm run build  # Placeholder for frontend build
 ```
 
 **Lint:**
 ```bash
-# To be added - ESLint configuration pending
 npm run lint
 ```
 
 **Test:**
 ```bash
-# RECOMMENDED: Run tests in Docker test environment
-npm test                             # Run all tests (uses Docker)
-npm run test:docker                  # Explicitly use Docker
+# Run all tests
+npm test
+
+# Run specific test suites
 npm run test:unit                    # Unit tests only
 npm run test:integration             # Integration tests only
 npm run test:regression              # Regression tests
-
-# Test environment management
-npm run test:setup                   # Start test environment
-npm run test:stop                    # Stop test environment
-npm run test:logs                    # View test logs
-
-# Alternative: Local tests (requires local PostgreSQL + Redis)
-npm run test:local                   # cd server && npm test
-
-# Using script directly
-./scripts/run-tests.sh docker        # Run all tests
-./scripts/run-tests.sh unit          # Unit tests only
-./scripts/run-tests.sh help          # Show all options
 
 # Quick syntax check
 cd server && npm run lint
@@ -64,49 +52,10 @@ cd server && npm run lint
 
 **Dev Server:**
 ```bash
-# Local development
+# Start development server
 npm run dev
 
-# Docker development
-npm run docker:up
-npm run docker:logs:app
-```
-
-**Docker Management:**
-```bash
-npm run docker:up          # Start all services
-npm run docker:down        # Stop all services
-npm run docker:logs        # View all logs
-npm run docker:logs:app    # View app logs
-npm run docker:logs:db     # View database logs
-npm run docker:logs:redis  # View Redis logs
-npm run docker:build       # Rebuild containers
-npm run docker:restart     # Restart services
-npm run docker:clean       # Clean all volumes
-npm run docker:ps          # List containers
-```
-
-**Production Docker Optimizations:**
-- Read-only root filesystem for enhanced security
-- Non-root user execution (UID 1000)
-- Graceful shutdown with proper signal handling
-- Node.js memory optimization (512MB heap limit)
-- Resource constraints (CPU/Memory limits)
-- Container resource monitoring dashboard
-- See: `docker/PRODUCTION_OPTIMIZATION.md`
-
-**Docker Validation & Security:**
-```bash
-# Full validation pipeline (build + security + baseline)
-npm run docker:validate
-
-# Individual validation steps
-npm run docker:security    # Run Trivy security scan
-npm run docker:baseline    # Update image size baseline
-
-# Manual validation
-./scripts/docker-security-scan.sh hse-digital:latest
-./scripts/update-docker-baseline.sh hse-digital:latest
+# Server runs on http://localhost:3001
 ```
 
 ## Tech Stack
@@ -117,7 +66,6 @@ npm run docker:baseline    # Update image size baseline
 - **Queue:** Bull (with Bull Board dashboard)
 - **Frontend:** React + Vite + TypeScript
 - **Authentication:** JWT
-- **Containerization:** Docker + Docker Compose
 - **Security:** Helmet, express-rate-limit, CORS
 - **Monitoring:** Pino (logging), Prometheus (metrics), Sentry (errors + performance), OpenTelemetry (tracing), Grafana (dashboards)
 - **Reports:** PDFKit (PDF generation), Puppeteer (chart rendering), AWS S3 (storage), Cron (scheduling)
@@ -134,20 +82,19 @@ npm run docker:baseline    # Update image size baseline
   - Single source of truth for Prisma client: `src/shared/utils/db.js`
 - **Caching:** Redis for rate limiting and session management
 - **Background Jobs:** Bull queue system for async processing (emails, reports, exports, webhooks, tenant onboarding)
-- **File Storage:** Local filesystem with volume mounts (Docker)
-- **Multi-stage Docker:** Optimized production builds
+- **File Storage:** Local filesystem or S3
 
 **See:** `server/ARCHITECTURE.md` for detailed structure documentation
 
-## Services
-- **app:** Node.js backend + frontend (port 3001)
-- **postgres:** PostgreSQL database (port 5432)
-- **redis:** Redis cache (port 6379)
-- **jaeger:** Distributed tracing UI (port 16686)
-- **pgadmin:** Database management UI (port 5050)
-- **prometheus:** Metrics collection (port 9090) - optional
-- **grafana:** Monitoring dashboards (port 3000) - optional
-- **loki:** Log aggregation (port 3100) - optional
+## Services (Production)
+Production deployment uses Kubernetes/EKS with:
+- **app:** Node.js backend + frontend
+- **postgres:** PostgreSQL database (managed RDS recommended)
+- **redis:** Redis cache (ElastiCache or in-cluster)
+- **jaeger:** Distributed tracing UI (optional)
+- **prometheus:** Metrics collection (optional)
+- **grafana:** Monitoring dashboards (optional)
+- **loki:** Log aggregation (optional)
 
 ## Code Style
 - Follow existing conventions in the codebase
@@ -174,9 +121,8 @@ All documentation is organized in the `/docs` directory:
 - **openapi.yaml** - OpenAPI 3.0 specification
 
 ### Deployment (`/docs/deployment/`)
-- **quick-start.md** - Get started in 5 minutes
-- **docker.md** - Local development with Docker
-- **production.md** - Production deployment guide
+- **quick-start.md** - Get started quickly
+- **production.md** - Production deployment guide (Kubernetes)
 - **runbook.md** - Step-by-step deployment procedures
 - **multi-region.md** - Multi-region deployment
 - **multi-region-runbook.md** - Multi-region operations
@@ -267,7 +213,6 @@ Full observability with Prometheus, Sentry, OpenTelemetry, and Grafana.
 
 ### Deployment Guides
 - Quick Start: [`docs/deployment/quick-start.md`](docs/deployment/quick-start.md)
-- Docker Setup: [`docs/deployment/docker.md`](docs/deployment/docker.md)
 - Production: [`docs/deployment/production.md`](docs/deployment/production.md)
 
 ### Development Workflow
@@ -275,7 +220,7 @@ Full observability with Prometheus, Sentry, OpenTelemetry, and Grafana.
 2. Review [`docs/api/endpoints.md`](docs/api/endpoints.md) for API reference
 3. Follow [`docs/architecture/overview.md`](docs/architecture/overview.md) for system design
 4. Implement features following existing patterns
-5. Test using `docker-compose exec app npm test`
+5. Test using `npm test`
 6. Update documentation as needed
 
 ## Backend Structure

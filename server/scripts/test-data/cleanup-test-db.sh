@@ -12,9 +12,9 @@ echo "🧹 HSE Digital - Test Data Cleanup"
 echo "===================================="
 echo ""
 
-# Check if we're running in Docker
+# Check if we're running in a container
 if [ -f /.dockerenv ]; then
-    echo "📦 Running in Docker container"
+    echo "📦 Running in container"
     NODE_ENV=test node -e "import('./tests/seeders/seed-test-data.js').then(m => m.cleanupTestData())"
 else
     echo "💻 Running locally"

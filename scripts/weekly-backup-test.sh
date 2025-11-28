@@ -4,6 +4,7 @@ set -euo pipefail
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/hse-digital}"
 TEST_DB="hse_platform_test"
 LOG_FILE="/tmp/backup-test-$(date +%Y%m%d).log"
+DB_USER="${DB_USER:-hse_admin}"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
@@ -43,8 +44,8 @@ fi
 log "✓ Restore completed"
 
 log "Step 3: Validating data"
-USER_COUNT=$(docker-compose exec -T postgres psql -U hse_admin -d "$TEST_DB" -t -c "SELECT COUNT(*) FROM \"User\";" 2>/dev/null | tr -d ' ')
-ORG_COUNT=$(docker-compose exec -T postgres psql -U hse_admin -d "$TEST_DB" -t -c "SELECT COUNT(*) FROM \"Organization\";" 2>/dev/null | tr -d ' ')
+USER_COUNT=$(psql -U "$DB_USER" -d "$TEST_DB" -t -c "SELECT COUNT(*) FROM \"User\";" 2>/dev/null | tr -d ' ')
+ORG_COUNT=$(psql -U "$DB_USER" -d "$TEST_DB" -t -c "SELECT COUNT(*) FROM \"Organization\";" 2>/dev/null | tr -d ' ')
 
 log "Users: $USER_COUNT"
 log "Organizations: $ORG_COUNT"
@@ -56,11 +57,11 @@ fi
 log "✓ Data validated"
 
 log "Step 4: Testing sample queries"
-docker-compose exec -T postgres psql -U hse_admin -d "$TEST_DB" -c "SELECT id, email, role FROM \"User\" LIMIT 5;" >> "$LOG_FILE" 2>&1
+psql -U "$DB_USER" -d "$TEST_DB" -c "SELECT id, email, role FROM \"User\" LIMIT 5;" >> "$LOG_FILE" 2>&1
 log "✓ Queries successful"
 
 log "Step 5: Cleaning up test database"
-docker-compose exec -T postgres psql -U hse_admin -d postgres -c "DROP DATABASE IF EXISTS $TEST_DB;" 2>/dev/null
+psql -U "$DB_USER" -d postgres -c "DROP DATABASE IF EXISTS $TEST_DB;" 2>/dev/null
 log "✓ Cleanup completed"
 
 log "==========================================="

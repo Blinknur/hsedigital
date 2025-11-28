@@ -24,8 +24,8 @@ check_dependencies() {
         missing_deps+=("pg_dump")
     fi
     
-    if ! command -v docker &> /dev/null; then
-        missing_deps+=("docker")
+    if [ "$USE_DOCKER" = true ] && ! command -v docker &> /dev/null; then
+        missing_deps+=("docker (required when USE_DOCKER=true)")
     fi
     
     if [ ${#missing_deps[@]} -ne 0 ]; then
