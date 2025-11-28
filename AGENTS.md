@@ -95,6 +95,20 @@ npm run docker:ps          # List containers
 - Container resource monitoring dashboard
 - See: `docker/PRODUCTION_OPTIMIZATION.md`
 
+**Docker Validation & Security:**
+```bash
+# Full validation pipeline (build + security + baseline)
+npm run docker:validate
+
+# Individual validation steps
+npm run docker:security    # Run Trivy security scan
+npm run docker:baseline    # Update image size baseline
+
+# Manual validation
+./scripts/docker-security-scan.sh hse-digital:latest
+./scripts/update-docker-baseline.sh hse-digital:latest
+```
+
 ## Tech Stack
 - **Language:** JavaScript (Node.js 18+)
 - **Backend Framework:** Express.js

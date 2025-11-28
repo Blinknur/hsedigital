@@ -1,0 +1,10 @@
+{
+  "size": 500000000,
+  "size_mb": 476.84,
+  "layer_count": 12,
+  "timestamp": "2024-01-15T00:00:00Z",
+  "git_commit": "initial",
+  "git_branch": "main",
+  "image_tag": "hse-digital:latest",
+  "note": "Initial baseline - update after first successful build"
+}

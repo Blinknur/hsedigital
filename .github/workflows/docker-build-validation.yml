@@ -1,0 +1,336 @@
+name: Docker Build Validation & Security
+
+on:
+  pull_request:
+    branches: [ main, staging, develop ]
+    paths:
+      - 'docker/**'
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'server/**'
+      - 'src/**'
+      - 'package*.json'
+      - '.github/workflows/docker-build-validation.yml'
+  push:
+    branches: [ main, staging ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  docker-build:
+    name: Build & Analyze Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: write
+      security-events: write
+
+    outputs:
+      image-size: ${{ steps.analyze.outputs.image-size }}
+      image-size-mb: ${{ steps.analyze.outputs.image-size-mb }}
+      layer-count: ${{ steps.analyze.outputs.layer-count }}
+      build-time: ${{ steps.build-timer.outputs.build-time }}
+      image-tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=pr
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+
+      - name: Start build timer
+        id: build-timer-start
+        run: echo "start_time=$(date +%s)" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: false
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          target: production
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+
+      - name: Calculate build time
+        id: build-timer
+        run: |
+          end_time=$(date +%s)
+          start_time=${{ steps.build-timer-start.outputs.start_time }}
+          build_time=$((end_time - start_time))
+          echo "build-time=${build_time}" >> $GITHUB_OUTPUT
+          echo "Build completed in ${build_time} seconds"
+
+      - name: Analyze image
+        id: analyze
+        run: |
+          IMAGE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+          IMAGE_SIZE=$(docker inspect $IMAGE_TAG --format='{{.Size}}')
+          IMAGE_SIZE_MB=$(echo "scale=2; $IMAGE_SIZE / 1024 / 1024" | bc)
+          LAYER_COUNT=$(docker history $IMAGE_TAG --no-trunc | wc -l)
+          LAYER_COUNT=$((LAYER_COUNT - 1))
+          echo "image-size=${IMAGE_SIZE}" >> $GITHUB_OUTPUT
+          echo "image-size-mb=${IMAGE_SIZE_MB}" >> $GITHUB_OUTPUT
+          echo "layer-count=${LAYER_COUNT}" >> $GITHUB_OUTPUT
+          echo "Image Size: ${IMAGE_SIZE_MB} MB"
+          echo "Layer Count: ${LAYER_COUNT}"
+
+      - name: Save image for scanning
+        run: |
+          IMAGE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+          docker save $IMAGE_TAG -o /tmp/image.tar
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/image.tar
+          retention-days: 1
+
+  security-scan-trivy:
+    name: Trivy Security Scan
+    runs-on: ubuntu-latest
+    needs: docker-build
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: write
+
+    outputs:
+      critical-count: ${{ steps.scan.outputs.critical }}
+      high-count: ${{ steps.scan.outputs.high }}
+      medium-count: ${{ steps.scan.outputs.medium }}
+      low-count: ${{ steps.scan.outputs.low }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp
+
+      - name: Load Docker image
+        run: docker load -i /tmp/image.tar
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ needs.docker-build.outputs.image-tag }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run Trivy for JSON output
+        id: scan
+        run: |
+          IMAGE_TAG=$(echo "${{ needs.docker-build.outputs.image-tag }}" | head -n1)
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --format json --output trivy-results.json $IMAGE_TAG
+          CRITICAL=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-results.json || echo 0)
+          HIGH=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy-results.json || echo 0)
+          MEDIUM=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="MEDIUM")] | length' trivy-results.json || echo 0)
+          LOW=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="LOW")] | length' trivy-results.json || echo 0)
+          echo "critical=${CRITICAL}" >> $GITHUB_OUTPUT
+          echo "high=${HIGH}" >> $GITHUB_OUTPUT
+          echo "medium=${MEDIUM}" >> $GITHUB_OUTPUT
+          echo "low=${LOW}" >> $GITHUB_OUTPUT
+
+      - name: Upload Trivy JSON results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-results
+          path: trivy-results.json
+          retention-days: 30
+
+  image-size-regression:
+    name: Image Size Regression Check
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.event_name == 'pull_request'
+
+    outputs:
+      size-change: ${{ steps.compare.outputs.size-change }}
+      size-change-mb: ${{ steps.compare.outputs.size-change-mb }}
+      size-change-pct: ${{ steps.compare.outputs.size-change-pct }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get baseline image size
+        id: baseline
+        run: |
+          if [ -f .docker-metrics/baseline.json ]; then
+            BASELINE_SIZE=$(jq -r '.size' .docker-metrics/baseline.json)
+          else
+            BASELINE_SIZE=500000000
+          fi
+          echo "baseline-size=${BASELINE_SIZE}" >> $GITHUB_OUTPUT
+
+      - name: Compare image sizes
+        id: compare
+        run: |
+          CURRENT_SIZE=${{ needs.docker-build.outputs.image-size }}
+          BASELINE_SIZE=${{ steps.baseline.outputs.baseline-size }}
+          SIZE_CHANGE=$((CURRENT_SIZE - BASELINE_SIZE))
+          SIZE_CHANGE_MB=$(echo "scale=2; $SIZE_CHANGE / 1024 / 1024" | bc)
+          SIZE_CHANGE_PCT=$(echo "scale=2; ($SIZE_CHANGE * 100) / $BASELINE_SIZE" | bc)
+          echo "size-change=${SIZE_CHANGE}" >> $GITHUB_OUTPUT
+          echo "size-change-mb=${SIZE_CHANGE_MB}" >> $GITHUB_OUTPUT
+          echo "size-change-pct=${SIZE_CHANGE_PCT}" >> $GITHUB_OUTPUT
+
+  docker-compose-validation:
+    name: Docker Compose Test
+    runs-on: ubuntu-latest
+    needs: docker-build
+
+    outputs:
+      health-status: ${{ steps.health.outputs.status }}
+      startup-time: ${{ steps.startup.outputs.time }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create .env file
+        run: |
+          cat > .env << 'EOF'
+          NODE_ENV=test
+          JWT_SECRET=test-secret-ci
+          REFRESH_SECRET=test-refresh-ci
+          DATABASE_URL=postgresql://hse_admin:dev_password_123@postgres:5432/hse_platform
+          CLIENT_URL=http://localhost:3001
+          REDIS_URL=redis://redis:6379
+          POSTGRES_USER=hse_admin
+          POSTGRES_PASSWORD=dev_password_123
+          POSTGRES_DB=hse_platform
+          EOF
+
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp
+
+      - name: Load Docker image
+        run: docker load -i /tmp/image.tar
+
+      - name: Start Docker Compose
+        id: startup
+        run: |
+          START_TIME=$(date +%s)
+          docker-compose -f docker/docker-compose.yml up -d
+          sleep 10
+          for i in {1..30}; do
+            if curl -sf http://localhost:3001/api/health > /dev/null 2>&1; then
+              END_TIME=$(date +%s)
+              STARTUP_TIME=$((END_TIME - START_TIME))
+              echo "time=${STARTUP_TIME}" >> $GITHUB_OUTPUT
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Run health checks
+        id: health
+        run: |
+          if curl -sf http://localhost:3001/api/health; then
+            echo "status=healthy" >> $GITHUB_OUTPUT
+          else
+            echo "status=unhealthy" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Stop Docker Compose
+        if: always()
+        run: docker-compose -f docker/docker-compose.yml down -v
+
+  pr-comment:
+    name: Post PR Comment
+    runs-on: ubuntu-latest
+    needs: [docker-build, security-scan-trivy, image-size-regression, docker-compose-validation]
+    if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Create PR comment
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const comment = `## 🐳 Docker Build Validation Report
+            
+            ### Build Metrics
+            | Metric | Value |
+            |--------|-------|
+            | **Build Time** | ${{ needs.docker-build.outputs.build-time }}s |
+            | **Image Size** | ${{ needs.docker-build.outputs.image-size-mb }} MB |
+            | **Layer Count** | ${{ needs.docker-build.outputs.layer-count }} |
+            | **Size Change** | ${{ needs.image-size-regression.outputs.size-change-mb }} MB (${{ needs.image-size-regression.outputs.size-change-pct }}%) |
+            
+            ### Security Scan (Trivy)
+            | Severity | Count |
+            |----------|-------|
+            | 🔴 Critical | ${{ needs.security-scan-trivy.outputs.critical-count }} |
+            | 🟠 High | ${{ needs.security-scan-trivy.outputs.high-count }} |
+            | 🟡 Medium | ${{ needs.security-scan-trivy.outputs.medium-count }} |
+            | 🟢 Low | ${{ needs.security-scan-trivy.outputs.low-count }} |
+            
+            ### Environment Validation
+            | Check | Status |
+            |-------|--------|
+            | Docker Compose | ✅ ${{ needs.docker-compose-validation.outputs.health-status }} |
+            | Startup Time | ${{ needs.docker-compose-validation.outputs.startup-time }}s |
+            
+            ---
+            *Generated by Docker Build Validation workflow*
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

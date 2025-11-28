@@ -85,3 +85,11 @@ docker/volumes/
 backup_*.sql
 *.backup
 *.dump
+
+# Docker security scanning results
+.docker-security/
+trivy-results.*
+grype-results.*
+
+# Docker metrics (baseline.json should be tracked)
+# .docker-metrics/ directory is tracked for baseline tracking

@@ -48,7 +48,10 @@
     "backup:tenant": "./scripts/backup.sh --tenant",
     "restore": "./scripts/restore.sh",
     "restore:list": "./scripts/restore.sh --list",
-    "backup:test": "./scripts/weekly-backup-test.sh"
+    "backup:test": "./scripts/weekly-backup-test.sh",
+    "docker:security": "./scripts/docker-security-scan.sh hse-digital:latest",
+    "docker:baseline": "./scripts/update-docker-baseline.sh hse-digital:latest",
+    "docker:validate": "npm run docker:build && npm run docker:security && npm run docker:baseline"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
