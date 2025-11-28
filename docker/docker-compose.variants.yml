@@ -1,0 +1,124 @@
+# ==============================================================================
+# Docker Compose Configuration - Base Image Variants
+# ==============================================================================
+# This file demonstrates different base image configurations.
+# Run from project root:
+#   docker-compose -f docker/docker-compose.yml -f docker/docker-compose.variants.yml --profile slim up
+#
+# Variants:
+#   - app-slim: Debian Slim (default, balanced)
+#   - app-bullseye: Debian Bullseye (maximum compatibility)
+#   - app-alpine: Alpine Linux (smallest size)
+# ==============================================================================
+
+services:
+  # ===========================================================================
+  # Slim Variant (Debian Slim) - Recommended for most use cases
+  # ===========================================================================
+  app-slim:
+    build: 
+      context: .
+      dockerfile: docker/Dockerfile
+      target: production
+      args:
+        NODE_VERSION: ${NODE_VERSION:-18}
+        BUILD_VARIANT: slim
+        BUILD_ENV: production
+    container_name: hse_app_slim
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-3001}:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hse_admin}:${POSTGRES_PASSWORD:-dev_password_123}@postgres:5432/${POSTGRES_DB:-hse_platform}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET environment variable is required}
+      - REFRESH_SECRET=${REFRESH_SECRET:?REFRESH_SECRET environment variable is required}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - hse_network
+    profiles:
+      - variants
+      - slim
+
+  # ===========================================================================
+  # Bullseye Variant (Debian Bullseye) - Maximum compatibility
+  # ===========================================================================
+  app-bullseye:
+    build: 
+      context: .
+      dockerfile: docker/Dockerfile
+      target: production
+      args:
+        NODE_VERSION: ${NODE_VERSION:-18}
+        BUILD_VARIANT: bullseye
+        BUILD_ENV: production
+    container_name: hse_app_bullseye
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-3002}:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hse_admin}:${POSTGRES_PASSWORD:-dev_password_123}@postgres:5432/${POSTGRES_DB:-hse_platform}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET environment variable is required}
+      - REFRESH_SECRET=${REFRESH_SECRET:?REFRESH_SECRET environment variable is required}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - hse_network
+    profiles:
+      - variants
+      - bullseye
+
+  # ===========================================================================
+  # Alpine Variant - Smallest image size
+  # ===========================================================================
+  app-alpine:
+    build: 
+      context: .
+      dockerfile: docker/Dockerfile
+      target: production
+      args:
+        NODE_VERSION: ${NODE_VERSION:-18}
+        BUILD_VARIANT: alpine
+        BUILD_ENV: production
+    container_name: hse_app_alpine
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-3003}:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hse_admin}:${POSTGRES_PASSWORD:-dev_password_123}@postgres:5432/${POSTGRES_DB:-hse_platform}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET environment variable is required}
+      - REFRESH_SECRET=${REFRESH_SECRET:?REFRESH_SECRET environment variable is required}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - hse_network
+    profiles:
+      - variants
+      - alpine
+
+networks:
+  hse_network:
+    name: hse_network
+    driver: bridge
+    external: true

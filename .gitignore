@@ -73,3 +73,15 @@ server/.nyc_output/
 *.lcov
 junit.xml
 test-report.html
+
+# Docker
+docker/.env
+!docker/.env.example
+docker/volumes/
+*.tar
+*.tar.gz
+
+# Database backups
+backup_*.sql
+*.backup
+*.dump
