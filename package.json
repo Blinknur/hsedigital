@@ -19,6 +19,7 @@
     "test:setup": "./scripts/run-tests.sh setup",
     "test:stop": "./scripts/run-tests.sh stop",
     "test:logs": "./scripts/run-tests.sh logs",
+    "test:health": "./scripts/run-tests.sh health",
     "lint": "cd server && npm run lint",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",

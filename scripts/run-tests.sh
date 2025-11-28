@@ -179,6 +179,39 @@ view_test_logs() {
     docker-compose -f docker/docker-compose.test.yml logs -f
 }
 
+# Option 7: Check health endpoint
+check_health() {
+    print_header "Checking Health Endpoint"
+    
+    print_info "Testing health endpoint at http://localhost:3002/api/health..."
+    
+    HTTP_CODE=$(curl -s -o /tmp/health_response.json -w "%{http_code}" http://localhost:3002/api/health 2>/dev/null || echo "000")
+    
+    if [ "$HTTP_CODE" = "200" ]; then
+        print_success "Health check passed! (HTTP $HTTP_CODE)"
+        if [ -f /tmp/health_response.json ]; then
+            echo ""
+            print_info "Response:"
+            cat /tmp/health_response.json | python3 -m json.tool 2>/dev/null || cat /tmp/health_response.json
+            echo ""
+        fi
+    elif [ "$HTTP_CODE" = "503" ]; then
+        print_warning "Service unhealthy but responding (HTTP $HTTP_CODE)"
+        if [ -f /tmp/health_response.json ]; then
+            echo ""
+            print_info "Response:"
+            cat /tmp/health_response.json | python3 -m json.tool 2>/dev/null || cat /tmp/health_response.json
+            echo ""
+        fi
+    else
+        print_error "Health check failed (HTTP $HTTP_CODE)"
+        print_info "Make sure the test environment is running:"
+        echo "  ./scripts/run-tests.sh setup"
+    fi
+    
+    rm -f /tmp/health_response.json
+}
+
 # Show usage
 show_usage() {
     echo "HSE Digital Test Runner"
@@ -194,12 +227,14 @@ show_usage() {
     echo "  setup           Start test environment without running tests"
     echo "  stop            Stop test environment"
     echo "  logs            View test environment logs"
+    echo "  health          Check health endpoint status"
     echo "  help            Show this help message"
     echo ""
     echo "Examples:"
     echo "  $0 docker          # Run all tests in Docker"
     echo "  $0 unit            # Run only unit tests"
     echo "  $0 setup           # Start test environment"
+    echo "  $0 health          # Check if service is healthy"
     echo "  $0 stop            # Stop test environment"
     echo ""
 }
@@ -232,6 +267,9 @@ main() {
             ;;
         logs)
             view_test_logs
+            ;;
+        health)
+            check_health
             ;;
         help|--help|-h)
             show_usage
