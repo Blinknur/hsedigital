@@ -1,11 +1,11 @@
 # Multi-stage build for Node.js application
 # Stage 1: Build dependencies and application
-FROM node:20-alpine AS builder
+FROM node:18-slim AS builder
 
 WORKDIR /app
 
-# Install OpenSSL development libraries for Prisma compatibility
-RUN apk add --no-cache openssl-dev
+# Install OpenSSL and other required dependencies for Prisma compatibility
+RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Copy package files
 COPY package*.json ./
@@ -28,12 +28,12 @@ RUN npm run build:sourcemaps || npm run build || echo "No build script found"
 RUN mkdir -p /app/dist
 
 # Stage 2: Production runtime
-FROM node:20-alpine AS production
+FROM node:18-slim AS production
 
 WORKDIR /app
 
-# Install OpenSSL for Prisma runtime
-RUN apk add --no-cache openssl
+# Install OpenSSL and other required dependencies for Prisma runtime
+RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Install production dependencies only
 COPY package*.json ./
