@@ -1,232 +1,364 @@
-# Kubernetes Configuration
+# Kubernetes Deployment with Automated Validation
 
-Kubernetes manifests for HSE Digital platform deployment.
+This directory contains Kubernetes manifests and deployment automation scripts for HSE Digital.
 
-## Structure
+## Directory Structure
 
 ```
 k8s/
-├── base/                    # Base Kubernetes resources
-│   ├── deployment.yaml      # Main application deployment
-│   ├── service.yaml         # Services (app + redis)
-│   ├── ingress.yaml         # Ingress with SSL/TLS
-│   ├── redis-deployment.yaml# Redis cache deployment
-│   ├── configmap.yaml       # Configuration values
-│   ├── pvc.yaml             # Persistent volume claims
-│   ├── hpa.yaml             # Horizontal pod autoscaler
-│   ├── serviceaccount.yaml  # Service account + RBAC
-│   ├── migration-job.yaml   # Database migration job
-│   └── kustomization.yaml   # Kustomize base config
-├── overlays/
-│   ├── staging/             # Staging environment overrides
-│   └── production/          # Production environment overrides
-└── secrets/                 # Secrets management configs
-    ├── aws-secrets-manager.yaml
-    ├── vault-secrets.yaml
-    └── .gitkeep
+├── base/                      # Base Kubernetes manifests
+│   ├── deployment.yaml        # Application deployment
+│   ├── service.yaml          # Service definition
+│   ├── ingress.yaml          # Ingress rules
+│   ├── hpa.yaml              # Horizontal Pod Autoscaler
+│   ├── configmap.yaml        # Configuration
+│   ├── serviceaccount.yaml   # Service account
+│   ├── pvc.yaml              # Persistent volume claims
+│   └── redis-deployment.yaml # Redis cache
+├── overlays/                  # Environment-specific overlays
+│   ├── staging/              # Staging configuration
+│   ├── production/           # Production configuration
+│   ├── us-east/              # US East region
+│   ├── eu-west/              # EU West region
+│   └── ap-southeast/         # AP Southeast region
+├── smoke-tests/               # Smoke test scripts
+│   ├── smoke-test.sh         # Shell-based smoke tests
+│   └── advanced-smoke-test.js # Node.js smoke tests
+├── validation/                # Deployment validation
+│   ├── validate-deployment.sh # Validation orchestrator
+│   ├── rollback.sh           # Automated rollback
+│   └── monitoring-integration.sh # Monitoring integration
+└── secrets/                   # Secret management
+    └── aws-secrets-manager.yaml # External secrets config
 ```
-
-## Prerequisites
-
-- Kubernetes cluster (EKS recommended)
-- kubectl configured
-- kustomize installed
-- External Secrets Operator (for secrets management)
-- NGINX Ingress Controller
-- Cert-Manager (for SSL certificates)
-- Metrics Server (for HPA)
 
 ## Quick Start
 
 ### Deploy to Staging
 
 ```bash
+# Configure kubectl
+aws eks update-kubeconfig --name hse-staging-cluster --region us-east-1
+
+# Deploy
 kubectl apply -k k8s/overlays/staging
+
+# Monitor rollout
+kubectl rollout status deployment/staging-hse-app -n hse-staging
+
+# Run smoke tests
+bash k8s/smoke-tests/smoke-test.sh hse-staging
 ```
 
 ### Deploy to Production
 
 ```bash
+# Configure kubectl
+aws eks update-kubeconfig --name hse-production-cluster --region us-east-1
+
+# Deploy
 kubectl apply -k k8s/overlays/production
+
+# Monitor rollout
+kubectl rollout status deployment/prod-hse-app -n hse-production
+
+# Run validation
+bash k8s/validation/validate-deployment.sh hse-production latest production
 ```
 
-### Run Database Migrations
+## Automated Deployment Pipeline
 
+### GitHub Actions Integration
+
+The deployment pipeline is automated via GitHub Actions:
+- **File**: `.github/workflows/k8s-deploy-validation.yml`
+- **Triggers**: Push to `staging` or `main` branches
+- **Features**: Build, deploy, validate, rollback on failure
+
+### Pipeline Flow
+
+1. **Build**: Docker image creation and push to registry
+2. **Deploy**: Kubernetes manifest application
+3. **Validate**: Smoke tests + health checks
+4. **Monitor**: Sentry + Prometheus integration
+5. **Rollback**: Automatic if validation fails
+
+## Smoke Tests
+
+### Basic Smoke Tests (Bash)
+
+Location: `k8s/smoke-tests/smoke-test.sh`
+
+**Tests 15 scenarios:**
+- Pod readiness
+- Health endpoint
+- Database connectivity
+- Redis connectivity
+- Prisma client
+- API response time
+- Environment variables
+- Metrics endpoint
+- Resource limits
+- Pod stability
+- Service accessibility
+- Probe configuration
+- Replica health
+- HPA configuration
+- Security context
+
+**Usage:**
 ```bash
-kubectl apply -f k8s/base/migration-job.yaml -n hse-production
-kubectl wait --for=condition=complete --timeout=10m job/db-migration -n hse-production
+bash k8s/smoke-tests/smoke-test.sh <namespace> [service-name] [timeout]
 ```
 
-## Configuration
+### Advanced Smoke Tests (Node.js)
 
-### Environment-Specific Settings
+Location: `k8s/smoke-tests/advanced-smoke-test.js`
 
-**Staging:**
-- Replicas: 2-5
-- Resources: 384Mi memory, 200m CPU
-- Domain: staging.hse.digital
+**Additional tests:**
+- Prisma query execution
+- API functionality
+- Resource usage
+- Sentry integration
+- Prometheus metrics
 
-**Production:**
-- Replicas: 3-10
-- Resources: 512Mi memory, 250m CPU  
-- Domains: hse.digital, www.hse.digital
-
-### Secrets Management
-
-Two options supported:
-
-**1. AWS Secrets Manager (Recommended)**
-
+**Usage:**
 ```bash
-# Create secret in AWS
-aws secretsmanager create-secret \
-  --name hse-digital/production \
-  --secret-string file://secrets.json
-
-# Apply external secret
-kubectl apply -f k8s/secrets/aws-secrets-manager.yaml -n hse-production
+NAMESPACE=hse-staging node k8s/smoke-tests/advanced-smoke-test.js
 ```
 
-**2. HashiCorp Vault**
+## Deployment Validation
 
+### Validation Script
+
+Location: `k8s/validation/validate-deployment.sh`
+
+**8-step validation process:**
+1. Wait for deployment rollout
+2. Verify pod readiness
+3. Run smoke tests
+4. Check pod restart count
+5. Monitor error logs
+6. Verify metrics collection
+7. Test API response time
+8. Confirm image tag
+
+**Usage:**
 ```bash
-# Write secrets to Vault
-vault kv put secret/hse-digital/production \
-  database_url="..." \
-  jwt_secret="..."
+bash k8s/validation/validate-deployment.sh <namespace> <image-tag> <environment>
 
-# Apply external secret
-kubectl apply -f k8s/secrets/vault-secrets.yaml -n hse-production
+# With auto-rollback
+AUTO_ROLLBACK=true bash k8s/validation/validate-deployment.sh hse-production v1.2.3 production
 ```
 
-### Storage Classes
+**Thresholds:**
+- Max pod restarts: 2
+- Max error count: 5
+- Max response time: 2000ms
+- Rollout timeout: 600s
 
-**EFS (for uploads):**
-- Access Mode: ReadWriteMany
-- Storage Class: `efs-sc`
-- Size: 20Gi
+## Automated Rollback
 
-**EBS GP3 (for Redis):**
-- Access Mode: ReadWriteOnce
-- Storage Class: `gp3`
-- Size: 5Gi
+### Rollback Script
+
+Location: `k8s/validation/rollback.sh`
+
+**Triggers rollback on:**
+- Failed smoke tests
+- Health check failures
+- Excessive restarts
+- High error rates
+
+**Usage:**
+```bash
+# Rollback to previous revision
+bash k8s/validation/rollback.sh <namespace> "<reason>"
+
+# Rollback to specific revision
+bash k8s/validation/rollback.sh <namespace> "<reason>" <revision>
+```
+
+**Example:**
+```bash
+bash k8s/validation/rollback.sh hse-production "Health check failure"
+```
+
+## Monitoring Integration
+
+### Sentry Integration
+
+Automatic release tracking:
+- Creates release with deployment SHA
+- Associates commits
+- Tracks deployment events
+- Links errors to releases
+
+### Prometheus Integration
+
+Deployment metrics:
+- `deployment_info{environment, image_tag, namespace}`
+- `deployment_status{environment, status}`
+- `deployment_timestamp{environment}`
+
+**Push metrics:**
+```bash
+bash k8s/validation/monitoring-integration.sh hse-production v1.2.3 production success
+```
+
+## Environment Configuration
+
+### Staging
+
+- **Namespace**: `hse-staging`
+- **Replicas**: 2
+- **Resources**: 512Mi RAM, 250m CPU
+- **HPA**: 2-5 replicas
+- **URL**: https://staging.hse.digital
+
+### Production
+
+- **Namespace**: `hse-production`
+- **Replicas**: 3
+- **Resources**: 1Gi RAM, 1000m CPU
+- **HPA**: 3-10 replicas
+- **URL**: https://hse.digital
+
+## Resource Requirements
+
+### Application Container
+
+```yaml
+requests:
+  memory: 512Mi
+  cpu: 250m
+limits:
+  memory: 1Gi
+  cpu: 1000m
+```
+
+### Init Container (Migrations)
+
+```yaml
+requests:
+  memory: 256Mi
+  cpu: 200m
+limits:
+  memory: 512Mi
+  cpu: 500m
+```
 
 ## Health Checks
 
-### Probes Configuration
-
-**Liveness Probe:**
-- Path: `/api/health`
-- Initial Delay: 30s
-- Period: 10s
-
-**Readiness Probe:**
-- Path: `/api/health`
-- Initial Delay: 10s
-- Period: 5s
-
-**Startup Probe:**
-- Path: `/api/health`
-- Initial Delay: 0s
-- Period: 5s
-- Failure Threshold: 30
-
-## Auto-scaling
-
-HPA scales pods based on:
-- CPU utilization: 70% threshold
-- Memory utilization: 80% threshold
-
-**Staging:**
-- Min: 2 replicas
-- Max: 5 replicas
-
-**Production:**
-- Min: 3 replicas
-- Max: 10 replicas
-
-## Init Containers
-
-Database migrations run as init container before app starts:
+### Liveness Probe
 
 ```yaml
-initContainers:
-  - name: db-migration
-    command:
-      - npx prisma generate
-      - npx prisma db push
+httpGet:
+  path: /api/health
+  port: 3001
+initialDelaySeconds: 30
+periodSeconds: 10
+timeoutSeconds: 5
+failureThreshold: 3
 ```
 
-## Security
-
-- Service accounts with IAM roles (IRSA)
-- Pods run as non-root user (UID 1000)
-- Read-only root filesystem (where possible)
-- Capabilities dropped
-- RBAC policies for least privilege access
-
-## Networking
-
-- **Service Type**: ClusterIP
-- **Ingress**: NGINX with automatic SSL via cert-manager
-- **Session Affinity**: ClientIP with 3-hour timeout
-- **CORS**: Configured via ingress annotations
-
-## Monitoring
-
-Prometheus scrape annotations enabled:
+### Readiness Probe
 
 ```yaml
-annotations:
-  prometheus.io/scrape: "true"
-  prometheus.io/port: "3001"
-  prometheus.io/path: "/metrics"
+httpGet:
+  path: /api/health
+  port: 3001
+initialDelaySeconds: 10
+periodSeconds: 5
+timeoutSeconds: 3
+failureThreshold: 3
+```
+
+### Startup Probe
+
+```yaml
+httpGet:
+  path: /api/health
+  port: 3001
+initialDelaySeconds: 0
+periodSeconds: 5
+timeoutSeconds: 3
+failureThreshold: 30
 ```
 
 ## Troubleshooting
 
-### Check deployment status
-
-```bash
-kubectl get all -n hse-production
-```
-
-### View pod logs
+### View Logs
 
 ```bash
 kubectl logs -f deployment/prod-hse-app -n hse-production
+kubectl logs <pod-name> -c init-container -n hse-production
 ```
 
-### Check init container logs
+### Debug Pod
 
 ```bash
-kubectl logs <pod-name> -c db-migration -n hse-production
+kubectl exec -it <pod-name> -n hse-production -- /bin/sh
+kubectl describe pod <pod-name> -n hse-production
 ```
 
-### Test health endpoint
+### Check Resources
 
 ```bash
-kubectl port-forward -n hse-production svc/hse-app-service 8080:80
-curl http://localhost:8080/api/health
+kubectl top pods -n hse-production
+kubectl get events -n hse-production --sort-by='.lastTimestamp'
 ```
 
-### Check HPA status
+### Manual Rollback
 
 ```bash
-kubectl get hpa -n hse-production
-kubectl describe hpa hse-app-hpa -n hse-production
+kubectl rollout history deployment/prod-hse-app -n hse-production
+kubectl rollout undo deployment/prod-hse-app -n hse-production
 ```
 
-## CI/CD Integration
+## Security
 
-GitHub Actions workflow automatically deploys on push:
-- `staging` branch → staging environment
-- `main` branch → production environment
+### Security Context
 
-See `.github/workflows/deploy.yml` for details.
+- Run as non-root user (UID 1000)
+- Read-only root filesystem: false (writeable for uploads)
+- Drop all capabilities
+- No privilege escalation
 
-## Additional Resources
+### Network Policies
 
-- [Deployment Runbook](../docs/DEPLOYMENT_RUNBOOK.md)
-- [AGENTS.md](../AGENTS.md) - Build, lint, test commands
-- [Docker Setup](../DOCKER_SETUP.md)
+- Ingress: Allow from ingress controller only
+- Egress: Allow to database, Redis, external APIs
+
+### Secrets Management
+
+- AWS Secrets Manager integration
+- External Secrets Operator
+- Automatic secret rotation support
+
+## CI/CD Requirements
+
+### GitHub Secrets
+
+Required in repository settings:
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_REGION`
+- `EKS_CLUSTER_NAME_STAGING`
+- `EKS_CLUSTER_NAME_PROD`
+- `SENTRY_AUTH_TOKEN`
+- `SENTRY_ORG`
+- `PROMETHEUS_PUSHGATEWAY` (optional)
+- `SLACK_WEBHOOK` (optional)
+
+## Documentation
+
+- **Production Runbook**: `docs/deployment/PRODUCTION_DEPLOYMENT_RUNBOOK.md`
+- **General Deployment**: `docs/deployment/production.md`
+- **Docker Setup**: `docs/deployment/docker.md`
+- **Architecture**: `docs/architecture/overview.md`
+
+## Support
+
+- **Issues**: GitHub Issues
+- **Slack**: #hse-deployments
+- **Docs**: https://docs.hse.digital

@@ -1,0 +1,248 @@
+name: Kubernetes Deployment with Validation
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      image_tag:
+        description: 'Docker image tag (default: commit SHA)'
+        required: false
+        type: string
+      auto_rollback:
+        description: 'Enable automatic rollback on failure'
+        required: true
+        type: boolean
+        default: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      image_digest: ${{ steps.build.outputs.digest }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ github.ref_name }}
+
+  deploy-staging:
+    name: Deploy to Staging with Validation
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/staging' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    environment:
+      name: staging
+      url: https://staging.hse.digital
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME_STAGING }} --region ${{ secrets.AWS_REGION }}
+      
+      - name: Install dependencies
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+      
+      - name: Update image tag in kustomization
+        run: |
+          cd k8s/overlays/staging
+          kustomize edit set image app-image=${{ needs.build.outputs.image_tag }}
+      
+      - name: Deploy to staging
+        run: |
+          kubectl apply -k k8s/overlays/staging
+      
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/staging-hse-app -n hse-staging --timeout=600s
+      
+      - name: Run smoke tests
+        run: |
+          chmod +x k8s/smoke-tests/smoke-test.sh
+          bash k8s/smoke-tests/smoke-test.sh hse-staging
+      
+      - name: Run validation
+        id: validation
+        run: |
+          chmod +x k8s/validation/validate-deployment.sh
+          export AUTO_ROLLBACK=true
+          bash k8s/validation/validate-deployment.sh hse-staging staging-${{ github.sha }} staging
+      
+      - name: Rollback on failure
+        if: failure() && steps.validation.outcome == 'failure'
+        run: |
+          chmod +x k8s/validation/rollback.sh
+          bash k8s/validation/rollback.sh hse-staging "Validation failed in CI/CD"
+      
+      - name: Create Sentry release
+        if: success()
+        run: |
+          curl -sL https://sentry.io/get-cli/ | bash
+          sentry-cli releases new -p hse-digital staging-${{ github.sha }}
+          sentry-cli releases set-commits staging-${{ github.sha }} --auto
+          sentry-cli releases finalize staging-${{ github.sha }}
+          sentry-cli releases deploys staging-${{ github.sha }} new -e staging
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+      
+      - name: Notify Slack
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'Staging deployment ${{ job.status }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+
+  deploy-production:
+    name: Deploy to Production with Validation
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    environment:
+      name: production
+      url: https://hse.digital
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME_PROD }} --region ${{ secrets.AWS_REGION }}
+      
+      - name: Install dependencies
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+      
+      - name: Update image tag in kustomization
+        run: |
+          cd k8s/overlays/production
+          kustomize edit set image app-image=${{ needs.build.outputs.image_tag }}
+      
+      - name: Deploy to production
+        run: |
+          kubectl apply -k k8s/overlays/production
+      
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/prod-hse-app -n hse-production --timeout=600s
+      
+      - name: Run smoke tests
+        run: |
+          chmod +x k8s/smoke-tests/smoke-test.sh
+          bash k8s/smoke-tests/smoke-test.sh hse-production
+      
+      - name: Run validation
+        id: validation
+        run: |
+          chmod +x k8s/validation/validate-deployment.sh
+          export AUTO_ROLLBACK=true
+          bash k8s/validation/validate-deployment.sh hse-production prod-${{ github.sha }} production
+      
+      - name: Rollback on failure
+        if: failure() && steps.validation.outcome == 'failure'
+        run: |
+          chmod +x k8s/validation/rollback.sh
+          bash k8s/validation/rollback.sh hse-production "Validation failed in CI/CD"
+      
+      - name: Create Sentry release
+        if: success()
+        run: |
+          curl -sL https://sentry.io/get-cli/ | bash
+          sentry-cli releases new -p hse-digital prod-${{ github.sha }}
+          sentry-cli releases set-commits prod-${{ github.sha }} --auto
+          sentry-cli releases finalize prod-${{ github.sha }}
+          sentry-cli releases deploys prod-${{ github.sha }} new -e production
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+      
+      - name: Push metrics to Prometheus
+        if: success()
+        run: |
+          echo "deployment_success{environment=\"production\",version=\"${{ github.sha }}\"} 1" | curl --data-binary @- ${{ secrets.PROMETHEUS_PUSHGATEWAY }}/metrics/job/deployment
+      
+      - name: Notify Slack
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'Production deployment ${{ job.status }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
