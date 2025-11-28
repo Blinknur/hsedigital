@@ -47,6 +47,12 @@
     "test:load:concurrent": "node tests/load-testing/scenarios/concurrent-tenant-test.js",
     "test:load:spike": "node tests/load-testing/scenarios/spike-test.js",
     "test:load:endurance": "node tests/load-testing/scenarios/endurance-test.js",
+    "test:seed": "node tests/seeders/seed-test-data.js",
+    "test:seed:refresh": "node tests/seeders/refresh-test-data.js",
+    "test:seed:cleanup": "node -e \"import('./tests/seeders/seed-test-data.js').then(m => m.cleanupTestData())\"",
+    "test:docker": "docker-compose -f docker/docker-compose.test.yml exec app-test npm test",
+    "test:docker:seed": "docker-compose -f docker/docker-compose.test.yml exec app-test npm run test:seed",
+    "test:docker:refresh": "docker-compose -f docker/docker-compose.test.yml exec app-test npm run test:seed:refresh",
     "rls:apply": "../prisma/migrations/apply_rls.sh",
     "rls:test": "node test-rls-implementation.js"
   },

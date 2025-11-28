@@ -1,6 +1,7 @@
 export * from './auth.helpers.js';
 export * from './db.helpers.js';
 export * from './test-data.helpers.js';
+export * from './test-isolation.helpers.js';
 
 export { seedTestDatabase, seedRBACData, cleanupSeededData } from '../utils/seed.utils.js';
 export { TestCleanupManager, cleanupTestResources, createCleanupManager } from '../utils/cleanup.utils.js';
