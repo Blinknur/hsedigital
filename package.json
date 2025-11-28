@@ -5,8 +5,8 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js",
+    "start": "cd server && node src/index.js",
+    "dev": "cd server && nodemon src/index.js",
     "build": "mkdir -p dist && echo 'Build: Backend only (frontend build requires vite to be installed)'",
     "build:frontend": "mkdir -p dist && (command -v vite >/dev/null 2>&1 && cd src && vite build || echo 'Vite not found, skipping frontend build')",
     "build:sourcemaps": "mkdir -p dist && (SENTRY_RELEASE=$(git describe --tags --always) && command -v vite >/dev/null 2>&1 && cd src && vite build || echo 'Vite not found, skipping frontend build')",
