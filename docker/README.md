@@ -1,350 +1,189 @@
 # Docker Configuration
 
-This directory contains all Docker-related configuration files for the HSE Digital platform.
-
-## Directory Structure
-
-```
-docker/
-├── Dockerfile                    # Multi-stage production build
-├── docker-compose.yml            # Main development/production stack
-├── docker-compose.test.yml       # Testing environment
-├── docker-compose.monitoring.yml # Monitoring stack (Prometheus, Grafana, Loki)
-├── docker-compose.multiregion.yml # Multi-region deployment
-└── README.md                     # This file
-```
-
-## Docker Compose Files
-
-### docker-compose.yml (Main Stack)
-**Services:**
-- `app` - Node.js backend + React frontend
-- `postgres` - PostgreSQL 15 database
-- `redis` - Redis 7 cache and queue
-- `pgadmin` - Database management UI
-- `jaeger` - Distributed tracing
-
-**Ports:**
-- 3001 - Application
-- 5432 - PostgreSQL
-- 6379 - Redis
-- 5050 - pgAdmin
-- 16686 - Jaeger UI
-
-**Usage:**
-```bash
-cd .. # Go to project root
-docker-compose -f docker/docker-compose.yml up -d
-docker-compose -f docker/docker-compose.yml logs -f app
-```
-
-### docker-compose.test.yml (Testing)
-**Services:**
-- `app-test` - Application in test mode
-- `postgres-test` - Test database
-- `redis-test` - Test cache
-
-**Ports:**
-- 3002 - Test application
-- 5433 - Test database
-- 6380 - Test Redis
-
-**Usage:**
-```bash
-cd ..
-docker-compose -f docker/docker-compose.test.yml up -d
-docker-compose -f docker/docker-compose.test.yml exec app-test npm test
-```
-
-### docker-compose.monitoring.yml (Monitoring Stack)
-**Additional Services:**
-- `prometheus` - Metrics collection
-- `grafana` - Dashboards and visualization
-- `loki` - Log aggregation
-- `promtail` - Log shipping
-
-**Ports:**
-- 9090 - Prometheus
-- 3000 - Grafana
-- 3100 - Loki
-
-**Usage:**
-```bash
-cd ..
-docker-compose -f docker/docker-compose.yml -f docker/docker-compose.monitoring.yml up -d
-```
-
-### docker-compose.multiregion.yml (Multi-Region)
-**Services:**
-- `app-us-east` - US East application instance
-- `app-eu-west` - EU West application instance
-- `postgres-primary` - Primary database with replication
-- `postgres-replica-eu` - EU replica database
-- `redis-us-east` - US East Redis
-- `redis-eu-west` - EU West Redis
-- `nginx-lb` - Load balancer
-
-**Usage:**
-```bash
-cd ..
-docker-compose -f docker/docker-compose.multiregion.yml up -d
-```
-
-## Dockerfile
-
-Multi-stage build optimized for production:
-
-**Stage 1 (builder):**
-- Install all dependencies
-- Generate Prisma client
-- Build frontend with source maps (if Vite available)
-- Create dist directory (ensures COPY operations succeed)
-
-**Stage 2 (production):**
-- Install production dependencies only
-- Copy built artifacts
-- Configure health checks
-- Expose port 3001
-
-**Build:**
-```bash
-cd ..
-docker build -f docker/Dockerfile -t hse-digital:latest .
-```
-
-**Rebuild containers after Dockerfile changes:**
-```bash
-# Test environment
-docker-compose -f docker/docker-compose.test.yml down
-docker-compose -f docker/docker-compose.test.yml build --no-cache
-docker-compose -f docker/docker-compose.test.yml up -d
-
-# Main environment
-docker-compose -f docker/docker-compose.yml down
-docker-compose -f docker/docker-compose.yml build --no-cache
-docker-compose -f docker/docker-compose.yml up -d
-```
-
-**Recent Changes:**
-- *Nov 2024*: **OpenSSL 3.x Compatibility Fix** - Upgraded from `node:18-alpine` to `node:20-alpine` and added explicit OpenSSL package installation to resolve Prisma binary compatibility issues with Alpine Linux's minimal OpenSSL libraries. This eliminates libssl detection warnings during container startup.
-  - Builder stage: Added `RUN apk add --no-cache openssl-dev` for Prisma compilation
-  - Production stage: Added `RUN apk add --no-cache openssl` for Prisma runtime
-  - Node.js 20 provides better OpenSSL 3.x compatibility out of the box
-- *Nov 2024*: Fixed build failure when frontend dependencies missing. The Dockerfile now creates an empty `dist` directory if the frontend build fails, preventing COPY errors.
+Production-optimized Docker setup for HSE Digital platform.
 
 ## Quick Start
 
-### Local Development
 ```bash
-# From project root
-cp config/environments/.env.development .env
+# Set required environment variables
+export JWT_SECRET="your-jwt-secret"
+export REFRESH_SECRET="your-refresh-secret"
 
-# Edit .env with required values (JWT_SECRET, REFRESH_SECRET)
-
-# Start services
+# Start all services
 docker-compose -f docker/docker-compose.yml up -d
 
-# Initialize database
-docker-compose -f docker/docker-compose.yml exec app npx prisma db push
+# Check status
+docker-compose -f docker/docker-compose.yml ps
 
 # View logs
 docker-compose -f docker/docker-compose.yml logs -f app
 ```
 
-### Production Deployment
+## Files
+
+- **Dockerfile** - Multi-stage production build with security hardening
+- **docker-compose.yml** - Main application stack
+- **docker-compose.monitoring.yml** - Monitoring stack (Prometheus, Grafana, Loki)
+- **docker-compose.test.yml** - Test environment
+- **docker-compose.multiregion.yml** - Multi-region deployment
+- **PRODUCTION_OPTIMIZATION.md** - Comprehensive production guide
+
+## Security Features
+
+✅ **Read-only root filesystem** - Prevents runtime modifications
+✅ **Non-root user (UID 1000)** - Principle of least privilege
+✅ **Minimal capabilities** - Only NET_BIND_SERVICE enabled
+✅ **no-new-privileges** - Prevents privilege escalation
+✅ **Resource limits** - CPU and memory constraints
+✅ **Graceful shutdown** - Proper signal handling (30s grace period)
+
+## Performance Optimizations
+
+- **Node.js memory tuning** - `--max-old-space-size=512`
+- **Thread pool optimization** - `UV_THREADPOOL_SIZE=4`
+- **Multi-stage builds** - Minimal production image
+- **dumb-init** - Proper PID 1 signal handling
+- **Health checks** - Automatic container health monitoring
+
+## Resource Limits
+
+### Application Container
+- CPU: 2.0 cores (limit) / 1.0 core (reservation)
+- Memory: 1GB (limit) / 512MB (reservation)
+
+### Database Container
+- CPU: 2.0 cores (limit) / 1.0 core (reservation)
+- Memory: 2GB (limit) / 1GB (reservation)
+
+### Redis Container
+- CPU: 1.0 core (limit) / 0.5 core (reservation)
+- Memory: 512MB (limit) / 256MB (reservation)
+
+## Monitoring
+
+Start the monitoring stack:
+
 ```bash
-# From project root
-cp config/environments/.env.production .env
-
-# Update all CHANGE_ME values in .env
-
-# Build production image
-docker build -f docker/Dockerfile -t hse-digital:latest .
-
-# Start production stack
-docker-compose -f docker/docker-compose.yml up -d
+docker-compose -f docker/docker-compose.monitoring.yml up -d
 ```
 
-### With Monitoring
-```bash
-# Start main stack + monitoring
-docker-compose -f docker/docker-compose.yml -f docker/docker-compose.monitoring.yml up -d
+Access services:
+- **Grafana**: http://localhost:3000 (admin/admin123)
+- **Prometheus**: http://localhost:9090
+- **Jaeger**: http://localhost:16686
 
-# Access dashboards
-# Grafana: http://localhost:3000 (admin/admin123)
-# Prometheus: http://localhost:9090
-# Jaeger: http://localhost:16686
-```
+### Available Dashboards
 
-## Environment Variables
+1. **Container Resource Usage** (`hse-container-resources`)
+   - CPU, Memory, Network I/O
+   - Node.js runtime metrics
+   - HTTP request metrics
 
-Docker Compose files read from `.env` file in project root.
+2. **Tenant Monitoring** (`hse-tenant-monitoring`)
+   - Per-tenant usage patterns
+   - API call tracking
+   - Performance metrics
 
-**Required variables:**
-- `JWT_SECRET` - JWT signing secret
-- `REFRESH_SECRET` - Refresh token secret
+3. **Cost Attribution** (`hse-cost-attribution`)
+   - Resource cost estimation
+   - Usage-based billing data
 
-**Optional with defaults:**
-- `POSTGRES_USER` (default: hse_admin)
-- `POSTGRES_PASSWORD` (default: dev_password_123)
-- `POSTGRES_DB` (default: hse_platform)
-- `REDIS_PASSWORD` (default: empty)
-- `CLIENT_URL` (default: http://localhost:3001)
+## Volumes
 
-See [config/README.md](../config/README.md) for full environment variable documentation.
+Persistent data stored in named volumes:
 
-## Volume Management
-
-**Persistent volumes:**
 - `hse_postgres_data` - Database data
-- `hse_redis_data` - Redis persistence
-- `hse_pgadmin_data` - pgAdmin settings
+- `hse_redis_data` - Cache data
 - `hse_app_uploads` - User uploads
-- `hse_backup_data` - Backup storage
+- `hse_app_reports` - Generated reports
+- `hse_app_logs` - Application logs
+- `hse_app_tmp` - Temporary files
 
-**List volumes:**
+## Verification
+
+### Check Security Settings
+
 ```bash
-docker volume ls | grep hse
+# Verify read-only filesystem
+docker inspect hse_app | grep ReadonlyRootfs
+
+# Verify non-root user
+docker exec hse_app whoami  # Should return: appuser
+
+# Check capabilities
+docker inspect hse_app | grep -A 10 CapDrop
 ```
 
-**Backup volume:**
+### Test Graceful Shutdown
+
 ```bash
-docker run --rm -v hse_postgres_data:/data -v $(pwd):/backup alpine tar czf /backup/postgres-backup.tar.gz /data
+# Monitor logs
+docker logs -f hse_app &
+
+# Send SIGTERM
+docker stop hse_app
+
+# Should see graceful shutdown sequence in logs
 ```
 
-**Clean volumes (WARNING: deletes all data):**
+### Monitor Resources
+
 ```bash
-cd ..
-docker-compose -f docker/docker-compose.yml down -v
+# Real-time stats
+docker stats hse_app hse_db hse_cache
+
+# Check Node.js memory limit
+docker exec hse_app node -e "console.log(require('v8').getHeapStatistics())"
 ```
-
-## Networking
-
-All services run on `hse_network` bridge network, allowing inter-service communication by service name.
-
-**Examples:**
-- Database: `postgres:5432`
-- Redis: `redis:6379`
-- Application: `app:3001`
-
-## Health Checks
-
-All services have health checks configured:
-
-**Check service health:**
-```bash
-cd ..
-docker-compose -f docker/docker-compose.yml ps
-```
-
-**Health check endpoints:**
-- App: `http://localhost:3001/api/health`
-- Postgres: `pg_isready` command
-- Redis: `redis-cli ping`
-- pgAdmin: `/misc/ping`
 
 ## Troubleshooting
 
-### Services won't start
+### Permission Errors
+
+```bash
+# Fix volume permissions
+docker exec -u root hse_app chown -R appuser:appuser /app/server/public
+```
+
+### Container Won't Start
+
 ```bash
 # Check logs
-cd ..
-docker-compose -f docker/docker-compose.yml logs
+docker logs hse_app
 
-# Check specific service
-docker-compose -f docker/docker-compose.yml logs app
+# Inspect configuration
+docker inspect hse_app
 
-# Restart services
-docker-compose -f docker/docker-compose.yml restart
+# Verify environment variables
+docker exec hse_app env | grep -E "JWT_SECRET|NODE_OPTIONS"
 ```
 
-### Database connection errors
-```bash
-# Check postgres is healthy
-docker-compose -f docker/docker-compose.yml ps postgres
-
-# Test connection
-docker-compose -f docker/docker-compose.yml exec postgres psql -U hse_admin -d hse_platform -c "SELECT 1"
-```
-
-### Redis connection errors
-```bash
-# Check redis is healthy
-docker-compose -f docker/docker-compose.yml ps redis
-
-# Test connection
-docker-compose -f docker/docker-compose.yml exec redis redis-cli ping
-```
-
-### Application errors
-```bash
-# View real-time logs
-docker-compose -f docker/docker-compose.yml logs -f app
-
-# Check environment variables
-docker-compose -f docker/docker-compose.yml exec app printenv
-
-# Access shell
-docker-compose -f docker/docker-compose.yml exec app sh
-```
-
-### Clean restart
-```bash
-cd ..
-docker-compose -f docker/docker-compose.yml down
-docker-compose -f docker/docker-compose.yml up -d
-```
-
-### Complete reset (WARNING: deletes all data)
-```bash
-cd ..
-docker-compose -f docker/docker-compose.yml down -v
-docker system prune -a
-docker-compose -f docker/docker-compose.yml up -d
-```
-
-## Production Considerations
-
-### Security
-1. **Use secrets management** - Don't store secrets in .env files
-2. **Limit exposed ports** - Only expose necessary ports
-3. **Use specific image tags** - Avoid `latest` tag
-4. **Run as non-root** - Configure USER in Dockerfile
-5. **Scan images** - Use `docker scan` or Snyk
-
-### Performance
-1. **Resource limits** - Set CPU and memory limits
-2. **Optimize builds** - Use build cache effectively
-3. **Multi-stage builds** - Reduce final image size
-4. **Health checks** - Configure appropriate intervals
-
-### Monitoring
-1. **Enable monitoring stack** - Use docker-compose.monitoring.yml
-2. **Configure alerts** - Set up Prometheus alerting
-3. **Log aggregation** - Use Loki for centralized logs
-4. **Metrics** - Monitor container metrics
-
-## NPM Scripts (from project root)
-
-For convenience, use these npm scripts:
+### High Resource Usage
 
 ```bash
-npm run docker:up          # Start services
-npm run docker:down        # Stop services
-npm run docker:logs        # View all logs
-npm run docker:logs:app    # View app logs
-npm run docker:logs:db     # View database logs
-npm run docker:logs:redis  # View Redis logs
-npm run docker:build       # Rebuild containers
-npm run docker:restart     # Restart services
-npm run docker:clean       # Clean volumes
-npm run docker:ps          # List containers
-npm run docker:health      # Check health
+# Check current usage
+docker stats --no-stream
+
+# Adjust limits in docker-compose.yml if needed
 ```
 
-## Related Documentation
+## Production Deployment
 
-- [Configuration Guide](../config/README.md) - Environment configuration
-- [AGENTS.md](../AGENTS.md) - Development commands
-- [DOCKER_SETUP.md](../DOCKER_SETUP.md) - Detailed Docker setup
-- [Server Documentation](../server/README.md) - Backend documentation
+See **PRODUCTION_OPTIMIZATION.md** for comprehensive production deployment guide.
+
+Key steps:
+1. Set all required environment variables
+2. Build production image
+3. Deploy with resource limits
+4. Verify security settings
+5. Configure monitoring
+6. Test graceful shutdown
+7. Set up log aggregation
+8. Configure alerts
+
+## Support
+
+For detailed information:
+- Production guide: `docker/PRODUCTION_OPTIMIZATION.md`
+- Monitoring setup: `server/monitoring/README.md`
+- Grafana dashboards: `server/monitoring/grafana/README.md`

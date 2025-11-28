@@ -549,45 +549,71 @@ const server = httpServer.listen(PORT, async () => {
     }
 });
 
-process.on('SIGTERM', async () => {
-    logger.info('SIGTERM received, shutting down gracefully');
-    reportScheduler.stopAll();
-    server.close(async () => {
-        logger.info('HTTP server closed');
-        
-        if (process.env.ENABLE_MULTI_REGION === 'true') {
-            await Promise.all([
-                replicaManager.disconnect(),
-                redisClusterManager.disconnect(),
-                failoverManager.shutdown(),
-            ]).catch(err => logger.error({ err }, 'Error during multi-region shutdown'));
-        }
-        
-        await prisma.$disconnect();
-        logger.info('Database connection closed');
-        process.exit(0);
-    });
-});
+let isShuttingDown = false;
 
-process.on('SIGINT', async () => {
-    logger.info('SIGINT received, shutting down gracefully');
-    reportScheduler.stopAll();
-    server.close(async () => {
-        logger.info('HTTP server closed');
+const gracefulShutdown = async (signal) => {
+    if (isShuttingDown) {
+        logger.warn(`${signal} received but shutdown already in progress`);
+        return;
+    }
+    
+    isShuttingDown = true;
+    logger.info(`${signal} received, initiating graceful shutdown`);
+    
+    const shutdownTimeout = setTimeout(() => {
+        logger.error('Graceful shutdown timeout exceeded, forcing exit');
+        process.exit(1);
+    }, 25000);
+    
+    try {
+        logger.info('Stopping report scheduler...');
+        reportScheduler.stopAll();
+        
+        logger.info('Closing HTTP server (waiting for active connections)...');
+        await new Promise((resolve, reject) => {
+            server.close((err) => {
+                if (err) reject(err);
+                else resolve();
+            });
+        });
+        logger.info('HTTP server closed successfully');
+        
+        if (io) {
+            logger.info('Closing WebSocket connections...');
+            await new Promise((resolve) => {
+                io.close(() => {
+                    logger.info('WebSocket server closed');
+                    resolve();
+                });
+            });
+        }
         
         if (process.env.ENABLE_MULTI_REGION === 'true') {
+            logger.info('Shutting down multi-region components...');
             await Promise.all([
                 replicaManager.disconnect(),
                 redisClusterManager.disconnect(),
                 failoverManager.shutdown(),
             ]).catch(err => logger.error({ err }, 'Error during multi-region shutdown'));
+            logger.info('Multi-region components shutdown complete');
         }
         
+        logger.info('Disconnecting from database...');
         await prisma.$disconnect();
         logger.info('Database connection closed');
+        
+        clearTimeout(shutdownTimeout);
+        logger.info('Graceful shutdown completed successfully');
         process.exit(0);
-    });
-});
+    } catch (error) {
+        clearTimeout(shutdownTimeout);
+        logger.error({ error }, 'Error during graceful shutdown');
+        process.exit(1);
+    }
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 process.on('unhandledRejection', (reason, promise) => {
     logger.error({ reason, promise }, 'Unhandled Promise Rejection');

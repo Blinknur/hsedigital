@@ -115,13 +115,21 @@ services:
       - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./server/monitoring/grafana:/etc/grafana/provisioning/dashboards
-      - ./server/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
-      - ./server/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ../server/monitoring/grafana:/etc/grafana/provisioning/dashboards
+      - ../server/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ../server/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
     depends_on:
       - prometheus
     networks:
       - hse_network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
 
   # --- Loki (Log Aggregation) ---
   loki:

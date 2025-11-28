@@ -86,6 +86,15 @@ npm run docker:clean       # Clean all volumes
 npm run docker:ps          # List containers
 ```
 
+**Production Docker Optimizations:**
+- Read-only root filesystem for enhanced security
+- Non-root user execution (UID 1000)
+- Graceful shutdown with proper signal handling
+- Node.js memory optimization (512MB heap limit)
+- Resource constraints (CPU/Memory limits)
+- Container resource monitoring dashboard
+- See: `docker/PRODUCTION_OPTIMIZATION.md`
+
 ## Tech Stack
 - **Language:** JavaScript (Node.js 18+)
 - **Backend Framework:** Express.js
