@@ -1,28 +1,25 @@
-# Multi-stage Dockerfile with Layer Caching Optimization
-# Base: Debian Slim (optimal balance of size and compatibility)
-# Architecture: Multi-stage build with separate dependency and build stages
+# Multi-stage Dockerfile using Debian Bullseye base
+# Purpose: Benchmark against slim variant for size comparison
 
-# Stage 1: Dependencies - Production dependencies only (cached separately)
-FROM node:18-slim AS deps
+# Stage 1: Dependencies - Cache npm dependencies separately
+FROM node:18-bullseye AS deps
 
 WORKDIR /app
 
-# Copy only package files for optimal layer caching
-# This layer is cached unless package.json changes
+# Copy only package files for better layer caching
 COPY package*.json ./
 COPY server/package*.json ./server/
 
-# Install production dependencies
-# npm ci is faster and more reliable than npm install for CI/CD
+# Install production dependencies only
 RUN npm ci --only=production && \
     cd server && npm ci --only=production
 
 # Stage 2: Builder - Build application with dev dependencies
-FROM node:18-slim AS builder
+FROM node:18-bullseye AS builder
 
 WORKDIR /app
 
-# Install build-time system dependencies (minimal set)
+# Install build dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     openssl \
@@ -33,26 +30,25 @@ RUN apt-get update && \
 COPY package*.json ./
 COPY server/package*.json ./server/
 
-# Install all dependencies (including dev dependencies for build)
+# Install all dependencies (including dev dependencies)
 RUN npm ci && cd server && npm ci
 
 # Copy application source
-# This layer changes frequently, so it's placed after dependency installation
 COPY . .
 
 # Generate Prisma client
 COPY prisma ./prisma
 RUN npx prisma generate
 
-# Build frontend with sourcemaps (fallback to regular build if unavailable)
+# Build frontend if build script exists
 RUN npm run build:sourcemaps || npm run build || mkdir -p /app/dist
 
-# Stage 3: Production runtime - Minimal runtime image
-FROM node:18-slim AS production
+# Stage 3: Production runtime
+FROM node:18-bullseye AS production
 
 WORKDIR /app
 
-# Install only runtime system dependencies (minimal set)
+# Install only runtime dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     openssl \
@@ -60,11 +56,10 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Create non-root user for security
+# Create non-root user
 RUN groupadd -r nodejs && useradd -r -g nodejs nodejs
 
-# Copy production dependencies from deps stage (not builder stage)
-# This avoids including dev dependencies in the final image
+# Copy production dependencies from deps stage
 COPY --from=deps --chown=nodejs:nodejs /app/node_modules ./node_modules
 COPY --from=deps --chown=nodejs:nodejs /app/server/node_modules ./server/node_modules
 
@@ -72,26 +67,26 @@ COPY --from=deps --chown=nodejs:nodejs /app/server/node_modules ./server/node_mo
 COPY --chown=nodejs:nodejs prisma ./prisma
 COPY --from=builder --chown=nodejs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 
-# Copy application files from builder stage
+# Copy application files
 COPY --from=builder --chown=nodejs:nodejs /app/package*.json ./
 COPY --from=builder --chown=nodejs:nodejs /app/server ./server
 COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
 
-# Create uploads directory with proper permissions
+# Create uploads directory
 RUN mkdir -p /app/server/public/uploads && \
     chown -R nodejs:nodejs /app/server/public/uploads
 
 # Switch to non-root user
 USER nodejs
 
-# Set environment variables
+# Set environment to production
 ENV NODE_ENV=production \
     NODE_OPTIONS="--max-old-space-size=2048"
 
 # Expose application port
 EXPOSE 3001
 
-# Health check using Node.js http module
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3001/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
