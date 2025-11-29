@@ -1,4 +1,4 @@
-import { authService } from '../services/authService.js';
+import { authService } from '../core/services/authService.js';
 
 console.log('=== Token Hashing Security Tests ===\n');
 

@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
-import { getRedisClient, closeRedis } from '../utils/redis.js';
-import { cacheManager } from '../utils/cache.js';
-import { buildCursorPagination, formatCursorResponse, encodeCursor, decodeCursor } from '../utils/pagination.js';
+import { getRedisClient, closeRedis } from '../shared/utils/redis.js';
+import { cacheManager } from '../shared/utils/cache.js';
+import { buildCursorPagination, formatCursorResponse, encodeCursor, decodeCursor } from '../shared/utils/pagination.js';
 
 describe('Performance Optimizations', () => {
   let redis;

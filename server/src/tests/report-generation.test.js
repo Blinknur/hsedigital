@@ -1,6 +1,6 @@
-import { createTracedPrismaClient } from '../utils/tracedPrismaClient.js';
-import { reportService } from '../services/reportService.js';
-import { s3Service } from '../services/s3Service.js';
+import prisma from '../shared/utils/db.js';
+import { reportService } from '../core/services/reportService.js';
+import { s3Service } from '../core/services/s3Service.js';
 
 const prisma = createTracedPrismaClient();
 

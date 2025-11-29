@@ -1,6 +1,6 @@
-import basePrisma from '../utils/db.js';
-import { prisma, setTenantContext, clearTenantContext, getTenantContext } from '../utils/prismaClient.js';
-import { tenantService } from '../services/tenantService.js';
+import basePrisma from '../shared/utils/db.js';
+import { prisma, setTenantContext, clearTenantContext, getTenantContext } from '../shared/utils/db.js';
+import { tenantService } from '../core/services/tenantService.js';
 
 console.log('=== Tenant Isolation Tests ===\n');
 

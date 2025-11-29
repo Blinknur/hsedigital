@@ -45,6 +45,8 @@ The platform is now running at:
 
 Complete documentation is available in the [`/docs`](./docs) directory:
 
+> **Note:** The project structure was recently cleaned up. See [CLEANUP_SUMMARY.md](./CLEANUP_SUMMARY.md) for details on removed files and updated paths.
+
 ### For Developers
 - **[Quick Start Guide](./docs/deployment/quick-start.md)** - Get started quickly
 - **[API Reference](./docs/api/endpoints.md)** - Complete REST API documentation

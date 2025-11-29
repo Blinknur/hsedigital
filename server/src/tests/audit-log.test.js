@@ -1,4 +1,4 @@
-import prisma from '../utils/db.js';
+import prisma from '../shared/utils/db.js';
 
 async function testAuditLogSystem() {
     console.log('🧪 Testing Audit Log System...\n');

@@ -3,7 +3,7 @@ import {
   exportTenantToCSV,
   validateImportData,
   cloneTenant
-} from '../services/tenantMigrationService.js';
+} from '../core/services/tenantMigrationService.js';
 
 const testExportToJSON = async () => {
   console.log('Testing exportTenantToJSON...');

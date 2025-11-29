@@ -1,5 +1,5 @@
-import { queueEmail, queueReport, getJobStatus } from '../services/queueService.js';
-import { logger } from '../utils/logger.js';
+import { queueEmail, queueReport, getJobStatus } from '../core/services/queueService.js';
+import { logger } from '../shared/utils/logger.js';
 
 const testEmailQueue = async () => {
     try {

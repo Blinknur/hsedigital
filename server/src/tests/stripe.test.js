@@ -1,11 +1,11 @@
-import prisma from '../utils/db.js';
+import prisma from '../shared/utils/db.js';
 import {
     createCheckoutSession,
     handleCheckoutComplete,
     handleSubscriptionUpdated,
     handleSubscriptionDeleted,
     handlePaymentFailed
-} from '../services/stripeService.js';
+} from '../core/services/stripeService.js';
 
 async function testStripeIntegration() {
     console.log('🧪 Testing Stripe Integration...\n');

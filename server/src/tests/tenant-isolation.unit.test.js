@@ -1,5 +1,5 @@
-import { setTenantContext, clearTenantContext, getTenantContext } from '../utils/prismaClient.js';
-import { tenantLogger } from '../utils/tenantLogger.js';
+import { setTenantContext, clearTenantContext, getTenantContext } from '../shared/utils/db.js';
+import { tenantLogger } from '../shared/utils/tenantLogger.js';
 
 console.log('=== Tenant Isolation Unit Tests (No DB Required) ===\n');
 

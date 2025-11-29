@@ -1,6 +1,6 @@
-import prisma from '../utils/db.js';
-import { provisionOrganization } from '../services/tenantProvisioning.js';
-import { authService } from '../services/authService.js';
+import prisma from '../shared/utils/db.js';
+import { provisionOrganization } from '../core/services/tenantProvisioning.js';
+import { authService } from '../core/services/authService.js';
 
 async function cleanup() {
     try {

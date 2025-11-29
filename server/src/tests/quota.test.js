@@ -1,4 +1,4 @@
-import prisma from '../utils/db.js';
+import prisma from '../shared/utils/db.js';
 import { 
     getPlanLimits, 
     checkQuota, 
@@ -6,7 +6,7 @@ import {
     getCurrentUsage,
     getUsageStats,
     checkFeatureAccess 
-} from '../services/quotaService.js';
+} from '../core/services/quotaService.js';
 
 describe('Quota Service', () => {
     let testOrgId;

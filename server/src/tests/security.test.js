@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import request from 'supertest';
-import prisma from '../utils/db.js';
+import prisma from '../shared/utils/db.js';
 import app from '../index.js';
 
 describe('Security Hardening Tests', () => {

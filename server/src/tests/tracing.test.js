@@ -5,7 +5,7 @@ process.env.OTEL_ENABLED = 'true';
 process.env.OTEL_SERVICE_NAME = 'hse-digital-test';
 process.env.OTEL_EXPORTER_OTLP_ENDPOINT = 'http://localhost:4318/v1/traces';
 
-import { initializeTracing, withSpan, addSpanAttributes, addSpanEvent, getCurrentTraceId } from '../utils/tracing.js';
+import { initializeTracing, withSpan, addSpanAttributes, addSpanEvent, getCurrentTraceId } from '../shared/utils/tracing.js';
 
 describe('OpenTelemetry Tracing', () => {
   let tracer;

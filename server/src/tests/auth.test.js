@@ -1,4 +1,4 @@
-import { authService, registerSchema, loginSchema } from '../services/authService.js';
+import { authService, registerSchema, loginSchema } from '../core/services/authService.js';
 
 console.log('=== JWT Authentication System Tests ===\n');
 

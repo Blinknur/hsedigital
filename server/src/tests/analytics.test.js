@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
-import analyticsService from '../services/analyticsService.js';
-import prisma from '../utils/db.js';
+import analyticsService from '../core/services/analyticsService.js';
+import prisma from '../shared/utils/db.js';
 
 describe('Analytics Service', () => {
   let testOrgId;

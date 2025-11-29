@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@jest/globals';
-import prisma from '../utils/db.js';
+import prisma from '../shared/utils/db.js';
 import Redis from 'ioredis';
 import * as Sentry from '@sentry/node';
 
