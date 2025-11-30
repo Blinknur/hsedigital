@@ -3,9 +3,7 @@ export default {
   
   transform: {},
   
-  moduleNameMapper: {
-    '^(\\.{1,2}/.*)\\.js$': '$1',
-  },
+  moduleNameMapper: {},
   
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   

@@ -1,153 +1,238 @@
+import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { authService, registerSchema, loginSchema } from '../core/services/authService.js';
 
-console.log('=== JWT Authentication System Tests ===\n');
+describe('JWT Authentication System Tests', () => {
+  describe('Password Hashing', () => {
+    it('should hash passwords correctly with bcrypt', async () => {
+      const password = 'Password123!';
+      const hashed = await authService.hashPassword(password);
+      
+      expect(hashed).toBeDefined();
+      expect(hashed).not.toBe(password);
+      expect(hashed.length).toBeGreaterThan(0);
+    });
 
-async function testPasswordHashing() {
-    console.log('Test 1: Password Hashing with bcrypt');
-    const password = 'Password123!';
-    const hashed = await authService.hashPassword(password);
-    console.log('✓ Password hashed:', hashed.substring(0, 20) + '...');
-    
-    const isValid = await authService.comparePassword(password, hashed);
-    console.log('✓ Password comparison:', isValid ? 'PASS' : 'FAIL');
-    
-    const isInvalid = await authService.comparePassword('wrongpass', hashed);
-    console.log('✓ Wrong password comparison:', !isInvalid ? 'PASS' : 'FAIL');
-    console.log('');
-}
+    it('should validate correct passwords', async () => {
+      const password = 'Password123!';
+      const hashed = await authService.hashPassword(password);
+      const isValid = await authService.comparePassword(password, hashed);
+      
+      expect(isValid).toBe(true);
+    });
 
-async function testTokenGeneration() {
-    console.log('Test 2: JWT Token Generation');
-    const mockUser = {
+    it('should reject incorrect passwords', async () => {
+      const password = 'Password123!';
+      const hashed = await authService.hashPassword(password);
+      const isInvalid = await authService.comparePassword('wrongpass', hashed);
+      
+      expect(isInvalid).toBe(false);
+    });
+  });
+
+  describe('JWT Token Generation', () => {
+    it('should generate access and refresh tokens', () => {
+      const mockUser = {
         id: 'test-user-id',
         email: 'test@example.com',
         role: 'Admin',
         organizationId: 'org-123'
-    };
-    
-    const tokens = authService.generateTokens(mockUser);
-    console.log('✓ Access Token generated:', tokens.accessToken.substring(0, 30) + '...');
-    console.log('✓ Refresh Token generated:', tokens.refreshToken.substring(0, 30) + '...');
-    console.log('');
-}
+      };
+      
+      const tokens = authService.generateTokens(mockUser);
+      
+      expect(tokens).toHaveProperty('accessToken');
+      expect(tokens).toHaveProperty('refreshToken');
+      expect(typeof tokens.accessToken).toBe('string');
+      expect(typeof tokens.refreshToken).toBe('string');
+      expect(tokens.accessToken.length).toBeGreaterThan(0);
+      expect(tokens.refreshToken.length).toBeGreaterThan(0);
+    });
 
-async function testTokenVerification() {
-    console.log('Test 3: JWT Token Verification');
-    const mockUser = {
+    it('should generate unique tokens for same user', async () => {
+      const mockUser = {
         id: 'test-user-id',
         email: 'test@example.com',
         role: 'Admin',
         organizationId: 'org-123'
-    };
-    
-    const accessToken = authService.generateAccessToken(mockUser);
-    const decoded = authService.verifyAccessToken(accessToken);
-    console.log('✓ Access Token verified:', decoded ? 'PASS' : 'FAIL');
-    console.log('✓ Decoded payload:', JSON.stringify(decoded, null, 2));
-    
-    const invalidDecoded = authService.verifyAccessToken('invalid.token.here');
-    console.log('✓ Invalid token rejected:', !invalidDecoded ? 'PASS' : 'FAIL');
-    console.log('');
-}
+      };
+      
+      await new Promise(resolve => setTimeout(resolve, 10));
+      const tokens1 = authService.generateTokens(mockUser);
+      await new Promise(resolve => setTimeout(resolve, 10));
+      const tokens2 = authService.generateTokens(mockUser);
+      
+      expect(tokens1.refreshToken).not.toBe(tokens2.refreshToken);
+    });
+  });
 
-async function testEmailVerificationToken() {
-    console.log('Test 4: Email Verification Token');
-    const token = authService.generateEmailVerificationToken();
-    console.log('✓ Email verification token:', token.substring(0, 30) + '...');
-    console.log('✓ Token length:', token.length);
-    console.log('✓ Expiry date:', authService.getEmailVerificationExpiry());
-    console.log('');
-}
+  describe('JWT Token Verification', () => {
+    it('should verify valid access tokens', () => {
+      const mockUser = {
+        id: 'test-user-id',
+        email: 'test@example.com',
+        role: 'Admin',
+        organizationId: 'org-123'
+      };
+      
+      const accessToken = authService.generateAccessToken(mockUser);
+      const decoded = authService.verifyAccessToken(accessToken);
+      
+      expect(decoded).toBeTruthy();
+      expect(decoded.id).toBe(mockUser.id);
+      expect(decoded.email).toBe(mockUser.email);
+      expect(decoded.role).toBe(mockUser.role);
+      expect(decoded.organizationId).toBe(mockUser.organizationId);
+    });
 
-async function testPasswordResetToken() {
-    console.log('Test 5: Password Reset Token');
-    const token = authService.generatePasswordResetToken();
-    console.log('✓ Password reset token:', token.substring(0, 30) + '...');
-    console.log('✓ Token length:', token.length);
-    console.log('✓ Expiry date:', authService.getPasswordResetExpiry());
-    console.log('');
-}
+    it('should reject invalid tokens', () => {
+      const invalidDecoded = authService.verifyAccessToken('invalid.token.here');
+      
+      expect(invalidDecoded).toBe(null);
+    });
 
-async function testValidationSchemas() {
-    console.log('Test 6: Validation Schemas');
-    
-    const validRegister = {
+    it('should reject malformed tokens', () => {
+      const invalidDecoded = authService.verifyAccessToken('not-even-a-token');
+      
+      expect(invalidDecoded).toBe(null);
+    });
+  });
+
+  describe('Email Verification Token', () => {
+    it('should generate email verification tokens', () => {
+      const token = authService.generateEmailVerificationToken();
+      
+      expect(token).toBeDefined();
+      expect(typeof token).toBe('string');
+      expect(token.length).toBeGreaterThan(0);
+    });
+
+    it('should generate unique email verification tokens', () => {
+      const token1 = authService.generateEmailVerificationToken();
+      const token2 = authService.generateEmailVerificationToken();
+      
+      expect(token1).not.toBe(token2);
+    });
+
+    it('should provide email verification expiry date', () => {
+      const expiry = authService.getEmailVerificationExpiry();
+      
+      expect(expiry).toBeInstanceOf(Date);
+      expect(expiry.getTime()).toBeGreaterThan(Date.now());
+    });
+  });
+
+  describe('Password Reset Token', () => {
+    it('should generate password reset tokens', () => {
+      const token = authService.generatePasswordResetToken();
+      
+      expect(token).toBeDefined();
+      expect(typeof token).toBe('string');
+      expect(token.length).toBeGreaterThan(0);
+    });
+
+    it('should generate unique password reset tokens', () => {
+      const token1 = authService.generatePasswordResetToken();
+      const token2 = authService.generatePasswordResetToken();
+      
+      expect(token1).not.toBe(token2);
+    });
+
+    it('should provide password reset expiry date', () => {
+      const expiry = authService.getPasswordResetExpiry();
+      
+      expect(expiry).toBeInstanceOf(Date);
+      expect(expiry.getTime()).toBeGreaterThan(Date.now());
+    });
+  });
+
+  describe('Validation Schemas', () => {
+    it('should validate correct registration data', () => {
+      const validRegister = {
         name: 'John Doe',
         email: 'john@example.com',
         password: 'Password123!',
         role: 'Admin'
-    };
-    const registerResult = registerSchema.safeParse(validRegister);
-    console.log('✓ Valid registration data:', registerResult.success ? 'PASS' : 'FAIL');
-    
-    const invalidRegister = {
+      };
+      
+      const result = registerSchema.safeParse(validRegister);
+      
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject invalid registration data', () => {
+      const invalidRegister = {
         name: 'J',
         email: 'invalid-email',
         password: 'weak',
-    };
-    const invalidRegisterResult = registerSchema.safeParse(invalidRegister);
-    console.log('✓ Invalid registration rejected:', !invalidRegisterResult.success ? 'PASS' : 'FAIL');
-    console.log('✓ Validation errors:', invalidRegisterResult.error?.errors.length, 'errors found');
-    
-    const validLogin = {
+      };
+      
+      const result = registerSchema.safeParse(invalidRegister);
+      
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
+      expect(result.error.errors.length).toBeGreaterThan(0);
+    });
+
+    it('should validate correct login data', () => {
+      const validLogin = {
         email: 'john@example.com',
         password: 'Password123!'
-    };
-    const loginResult = loginSchema.safeParse(validLogin);
-    console.log('✓ Valid login data:', loginResult.success ? 'PASS' : 'FAIL');
-    console.log('');
-}
+      };
+      
+      const result = loginSchema.safeParse(validLogin);
+      
+      expect(result.success).toBe(true);
+    });
 
-async function testRefreshTokenRotation() {
-    console.log('Test 7: Refresh Token Rotation (Simulated)');
-    const userId = 'test-user-id';
-    const refreshToken1 = authService.generateRefreshToken(userId);
-    const refreshToken2 = authService.generateRefreshToken(userId);
-    
-    console.log('✓ First refresh token:', refreshToken1.substring(0, 30) + '...');
-    console.log('✓ Second refresh token:', refreshToken2.substring(0, 30) + '...');
-    console.log('✓ Tokens are unique:', refreshToken1 !== refreshToken2 ? 'PASS' : 'FAIL');
-    console.log('');
-}
+    it('should reject invalid login data', () => {
+      const invalidLogin = {
+        email: 'not-an-email',
+        password: ''
+      };
+      
+      const result = loginSchema.safeParse(invalidLogin);
+      
+      expect(result.success).toBe(false);
+    });
+  });
 
-async function testTokenHashing() {
-    console.log('Test 8: Token Hashing with SHA-256');
-    const emailToken = authService.generateEmailVerificationToken();
-    const hashedEmailToken = authService.hashToken(emailToken);
-    
-    console.log('✓ Original email token:', emailToken.substring(0, 30) + '...');
-    console.log('✓ Hashed email token:', hashedEmailToken.substring(0, 30) + '...');
-    console.log('✓ Hashed token length:', hashedEmailToken.length, '(SHA-256 produces 64 hex chars)');
-    
-    const passwordResetToken = authService.generatePasswordResetToken();
-    const hashedPasswordToken = authService.hashToken(passwordResetToken);
-    
-    console.log('✓ Original password reset token:', passwordResetToken.substring(0, 30) + '...');
-    console.log('✓ Hashed password reset token:', hashedPasswordToken.substring(0, 30) + '...');
-    
-    const sameTokenHashed1 = authService.hashToken(emailToken);
-    const sameTokenHashed2 = authService.hashToken(emailToken);
-    console.log('✓ Same input produces same hash:', sameTokenHashed1 === sameTokenHashed2 ? 'PASS' : 'FAIL');
-    
-    console.log('✓ Different tokens produce different hashes:', hashedEmailToken !== hashedPasswordToken ? 'PASS' : 'FAIL');
-    console.log('');
-}
+  describe('Refresh Token Rotation', () => {
+    it('should generate different refresh tokens on each call', () => {
+      const userId = 'test-user-id';
+      const refreshToken1 = authService.generateRefreshToken(userId);
+      const refreshToken2 = authService.generateRefreshToken(userId);
+      
+      expect(refreshToken1).not.toBe(refreshToken2);
+      expect(refreshToken1.length).toBeGreaterThan(0);
+      expect(refreshToken2.length).toBeGreaterThan(0);
+    });
+  });
 
-async function runAllTests() {
-    try {
-        await testPasswordHashing();
-        await testTokenGeneration();
-        await testTokenVerification();
-        await testEmailVerificationToken();
-        await testPasswordResetToken();
-        await testValidationSchemas();
-        await testRefreshTokenRotation();
-        await testTokenHashing();
-        console.log('=== All Tests Completed Successfully ===');
-    } catch (error) {
-        console.error('Test failed:', error);
-        process.exit(1);
-    }
-}
+  describe('Token Hashing', () => {
+    it('should hash tokens with SHA-256', () => {
+      const emailToken = authService.generateEmailVerificationToken();
+      const hashedEmailToken = authService.hashToken(emailToken);
+      
+      expect(hashedEmailToken).toBeDefined();
+      expect(hashedEmailToken).not.toBe(emailToken);
+      expect(hashedEmailToken.length).toBe(64);
+    });
 
-runAllTests();
+    it('should produce consistent hashes for same input', () => {
+      const token = authService.generateEmailVerificationToken();
+      const hash1 = authService.hashToken(token);
+      const hash2 = authService.hashToken(token);
+      
+      expect(hash1).toBe(hash2);
+    });
+
+    it('should produce different hashes for different inputs', () => {
+      const token1 = authService.generateEmailVerificationToken();
+      const token2 = authService.generatePasswordResetToken();
+      const hash1 = authService.hashToken(token1);
+      const hash2 = authService.hashToken(token2);
+      
+      expect(hash1).not.toBe(hash2);
+    });
+  });
+});
