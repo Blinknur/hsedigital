@@ -1,9 +1,12 @@
 import { PrismaClient } from '@prisma/client';
+import { AsyncLocalStorage } from 'async_hooks';
 import { logger, logDatabaseOperation } from './logger.js';
 import { databaseQueryDuration, databaseQueryTotal } from './metrics.js';
 import { withSpan, addSpanAttributes, recordException } from './tracing.js';
 
 const isTracingEnabled = process.env.OTEL_ENABLED === 'true';
+
+const tenantContext = new AsyncLocalStorage();
 
 const prismaClientSingleton = () => {
   const client = new PrismaClient({
@@ -201,6 +204,83 @@ const prisma = globalForPrisma.prisma ?? prismaClientSingleton();
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
 }
+
+export function setTenantContext(tenantId) {
+  tenantContext.enterWith(tenantId);
+}
+
+export function clearTenantContext() {
+  tenantContext.enterWith(null);
+}
+
+export function getTenantContext() {
+  return tenantContext.getStore();
+}
+
+const modelsWithTenantIsolation = [
+  'audit', 'incident', 'station', 'contractor', 'chemicalInventory',
+  'inspectionChecklist', 'maintenanceRecord', 'trainingRecord',
+  'emergencyContact', 'safetyDocument', 'user', 'role', 'activity',
+  'notification', 'report', 'invoice', 'webhook', 'apiKey'
+];
+
+const modelsWithoutTenantId = ['organization', 'refreshToken'];
+
+prisma.$use(async (params, next) => {
+  const currentTenantId = getTenantContext();
+  const modelName = params.model;
+  
+  if (!modelName || modelsWithoutTenantId.includes(modelName)) {
+    return next(params);
+  }
+  
+  if (!modelsWithTenantIsolation.includes(modelName)) {
+    return next(params);
+  }
+  
+  const action = params.action;
+  
+  if (action === 'create' || action === 'createMany') {
+    if (!currentTenantId) {
+      throw new Error(`Cannot create ${modelName} without tenant context`);
+    }
+    
+    if (action === 'create') {
+      if (!params.args.data.organizationId) {
+        params.args.data.organizationId = currentTenantId;
+      }
+    } else if (action === 'createMany') {
+      if (Array.isArray(params.args.data)) {
+        params.args.data = params.args.data.map(item => ({
+          ...item,
+          organizationId: item.organizationId || currentTenantId
+        }));
+      }
+    }
+  }
+  
+  if (['findUnique', 'findFirst', 'findMany', 'update', 'updateMany', 'delete', 'deleteMany', 'count', 'aggregate'].includes(action)) {
+    if (currentTenantId) {
+      params.args = params.args || {};
+      params.args.where = params.args.where || {};
+      
+      if (!params.args.where.organizationId) {
+        params.args.where.organizationId = currentTenantId;
+      }
+    } else {
+      params.args = params.args || {};
+      params.args.where = params.args.where || {};
+      
+      if (action === 'findMany') {
+        params.args.where.organizationId = '__NO_TENANT__';
+      } else if (action === 'findFirst' || action === 'findUnique') {
+        params.args.where.organizationId = '__NO_TENANT__';
+      }
+    }
+  }
+  
+  return next(params);
+});
 
 export { prisma };
 export default prisma;

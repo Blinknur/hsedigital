@@ -112,6 +112,15 @@ export class CacheManager {
       logger.error({ error }, 'Cache mset error');
     }
   }
+
+  async flushAll() {
+    try {
+      await this.redis.flushall();
+      logger.debug('Cache flushed');
+    } catch (error) {
+      logger.error({ error }, 'Cache flush error');
+    }
+  }
 }
 
 export const cacheManager = new CacheManager();

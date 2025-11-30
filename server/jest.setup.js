@@ -1,4 +1,5 @@
 import { jest } from '@jest/globals';
+import prisma from './src/shared/utils/db.js';
 
 jest.setTimeout(30000);
 
@@ -38,3 +39,38 @@ process.env.OTEL_ENABLED = 'false';
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://test:test@localhost:5432/test_db';
 process.env.REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 process.env.REDIS_PORT = process.env.REDIS_PORT || '6379';
+
+global.prisma = prisma;
+
+let dbConnectionEstablished = false;
+
+beforeAll(async () => {
+  try {
+    await prisma.$connect();
+    dbConnectionEstablished = true;
+    console.log('✓ Test database connection established');
+  } catch (error) {
+    console.warn('⚠ Database connection failed. Integration tests will be skipped.');
+    console.warn(`  Database URL: ${process.env.DATABASE_URL.replace(/:[^:@]*@/, ':***@')}`);
+    console.warn(`  Error: ${error.message}`);
+    dbConnectionEstablished = false;
+  }
+});
+
+afterAll(async () => {
+  if (dbConnectionEstablished) {
+    try {
+      await prisma.$disconnect();
+      console.log('✓ Test database connection closed');
+    } catch (error) {
+      console.error('Failed to disconnect from test database:', error.message);
+    }
+  }
+});
+
+afterEach(async () => {
+  const { clearTenantContext } = await import('./src/shared/utils/db.js');
+  clearTenantContext();
+});
+
+export { dbConnectionEstablished };

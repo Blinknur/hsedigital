@@ -129,3 +129,33 @@ export const batchGetTenants = async (tenantIds) => {
   
   return result;
 };
+
+export const validateTenant = async (tenantId) => {
+  if (!tenantId) {
+    return false;
+  }
+  
+  try {
+    const tenant = await getTenantById(tenantId);
+    return tenant !== null;
+  } catch (error) {
+    logger.error({ tenantId, error }, 'Error validating tenant');
+    return false;
+  }
+};
+
+export const clearAllTenantCache = async () => {
+  await cacheManager.flushAll();
+  logger.info('All tenant cache cleared');
+};
+
+export const tenantService = {
+  getTenantById,
+  getTenantWithUsers,
+  getTenantStations,
+  getTenantContractors,
+  invalidateTenantCache,
+  batchGetTenants,
+  validateTenant,
+  clearAllTenantCache
+};
