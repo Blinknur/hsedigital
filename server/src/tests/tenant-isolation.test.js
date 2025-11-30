@@ -1,5 +1,6 @@
 import { setTenantContext, clearTenantContext, getTenantContext } from '../shared/utils/db.js';
 import { tenantService } from '../core/services/tenantService.js';
+import { closeRedis } from '../shared/utils/redis.js';
 
 const prisma = global.prisma;
 
@@ -41,17 +42,27 @@ describe('Tenant Isolation Tests', () => {
   });
 
   afterAll(async () => {
-    await prisma.station.deleteMany({
-      where: {
-        id: { in: [testStationId1, testStationId2] }
-      }
-    });
+    try {
+      await prisma.station.deleteMany({
+        where: {
+          id: { in: [testStationId1, testStationId2] }
+        }
+      });
 
-    await prisma.organization.deleteMany({
-      where: {
-        id: { in: [testOrgId1, testOrgId2] }
-      }
-    });
+      await prisma.organization.deleteMany({
+        where: {
+          id: { in: [testOrgId1, testOrgId2] }
+        }
+      });
+
+      await prisma.$disconnect();
+      
+      await closeRedis();
+    } catch (error) {
+      console.error('Error during cleanup:', error);
+    } finally {
+      clearTenantContext();
+    }
   });
 
   afterEach(() => {

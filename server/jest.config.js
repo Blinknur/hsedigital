@@ -1,6 +1,8 @@
 export default {
   testEnvironment: 'node',
   
+  globalTeardown: '<rootDir>/jest.teardown.js',
+  
   transform: {},
   
   moduleNameMapper: {
