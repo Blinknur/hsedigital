@@ -20,3 +20,5 @@ global.console = {
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-key-for-testing';
 process.env.REFRESH_SECRET = process.env.REFRESH_SECRET || 'test-refresh-secret-key-for-testing';
+
+process.env.OTEL_ENABLED = 'false';

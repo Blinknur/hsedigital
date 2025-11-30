@@ -1,9 +1,3 @@
-import { NodeSDK } from '@opentelemetry/sdk-node';
-import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
-import { Resource } from '@opentelemetry/resources';
-import { SEMRESATTRS_SERVICE_NAME, SEMRESATTRS_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
-import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
 import { context, trace, SpanStatusCode } from '@opentelemetry/api';
 import { logger } from './logger.js';
 
@@ -77,13 +71,20 @@ export class TenantAwareTraceIdRatioBasedSampler {
 let sdk;
 let tracer;
 
-export const initializeTracing = () => {
+export const initializeTracing = async () => {
   if (!isTracingEnabled) {
     logger.info('OpenTelemetry tracing is disabled');
     return null;
   }
 
   try {
+    const { NodeSDK } = await import('@opentelemetry/sdk-node');
+    const { getNodeAutoInstrumentations } = await import('@opentelemetry/auto-instrumentations-node');
+    const { OTLPTraceExporter } = await import('@opentelemetry/exporter-trace-otlp-http');
+    const { Resource } = await import('@opentelemetry/resources');
+    const { SEMRESATTRS_SERVICE_NAME, SEMRESATTRS_SERVICE_VERSION } = await import('@opentelemetry/semantic-conventions');
+    const { BatchSpanProcessor } = await import('@opentelemetry/sdk-trace-node');
+
     const traceExporter = new OTLPTraceExporter({
       url: otlpEndpoint,
       headers: process.env.OTEL_EXPORTER_OTLP_HEADERS 

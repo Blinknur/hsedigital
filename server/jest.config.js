@@ -7,6 +7,8 @@ export default {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
   
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+  
   testMatch: [
     '**/tests/**/*.test.js',
     '**/src/tests/**/*.test.js',

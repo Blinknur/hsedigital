@@ -89,7 +89,9 @@ function validateRequiredEnvVars() {
 validateRequiredEnvVars();
 
 import { initializeTracing } from './shared/utils/tracing.js';
-initializeTracing();
+initializeTracing().catch(err => {
+    console.error('Failed to initialize tracing:', err);
+});
 
 startAllProcessors();
 
