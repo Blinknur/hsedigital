@@ -1,4 +1,9 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, jest } from '@jest/globals';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const mockPrisma = {
   audit: {
@@ -18,8 +23,10 @@ const mockPrisma = {
   $disconnect: jest.fn(),
 };
 
-jest.unstable_mockModule('../shared/utils/db.js', () => ({
+const dbPath = resolve(__dirname, '../shared/utils/db.js');
+jest.unstable_mockModule(dbPath, () => ({
   default: mockPrisma,
+  prisma: mockPrisma,
 }));
 
 const mockRedis = {
@@ -38,7 +45,8 @@ const mockRedis = {
   on: jest.fn(),
 };
 
-jest.unstable_mockModule('../shared/utils/redis.js', () => ({
+const redisPath = resolve(__dirname, '../shared/utils/redis.js');
+jest.unstable_mockModule(redisPath, () => ({
   getRedisClient: jest.fn(() => mockRedis),
 }));
 

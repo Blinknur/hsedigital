@@ -1,4 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const mockPrisma = {
     organization: {
@@ -21,7 +26,8 @@ const mockPrisma = {
     $disconnect: jest.fn(),
 };
 
-jest.unstable_mockModule('../shared/utils/db.js', () => ({
+const dbPath = resolve(__dirname, '../shared/utils/db.js');
+jest.unstable_mockModule(dbPath, () => ({
     default: mockPrisma,
 }));
 
