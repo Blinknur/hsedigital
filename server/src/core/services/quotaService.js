@@ -24,7 +24,7 @@ let quotaConfig = null;
 
 async function loadQuotaConfig() {
     if (!quotaConfig) {
-        const configPath = path.join(__dirname, '../config/quota.json');
+        const configPath = path.join(__dirname, '../../infrastructure/config/quota.json');
         const data = await fs.readFile(configPath, 'utf8');
         quotaConfig = JSON.parse(data);
     }

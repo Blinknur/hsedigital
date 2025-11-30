@@ -94,7 +94,7 @@ describe('Quota Service', () => {
             
             expect(plan).toBeDefined();
             expect(plan.limits).toBeDefined();
-            expect(plan.limits.stations).toBe(50);
+            expect(plan.limits.stations).toBe(100);
         });
 
         it('should default to free plan for unknown plan', async () => {
