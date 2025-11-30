@@ -1,5 +1,5 @@
 import { logger } from '../../shared/utils/logger.js';
-import { getRegionByGeoLocation, getRegionForTenant, getCurrentRegion } from '../config/multiRegion.js';
+import { getRegionByGeoLocation, getRegionForTenant, getCurrentRegion } from '../../infrastructure/config/multiRegion.js';
 
 const GEO_HEADER_PRIORITY = [
   'cf-ipcountry',

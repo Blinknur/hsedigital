@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { logger } from './logger.js';
-import { getCurrentRegion, getFailoverRegions } from '../config/multiRegion.js';
+import { getCurrentRegion, getFailoverRegions } from '../../infrastructure/config/multiRegion.js';
 
 class DatabaseReplicaManager {
   constructor() {

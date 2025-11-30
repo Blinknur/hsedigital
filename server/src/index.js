@@ -89,11 +89,13 @@ function validateRequiredEnvVars() {
 validateRequiredEnvVars();
 
 import { initializeTracing } from './shared/utils/tracing.js';
-initializeTracing().catch(err => {
-    console.error('Failed to initialize tracing:', err);
-});
+if (process.env.NODE_ENV !== 'test') {
+    initializeTracing().catch(err => {
+        console.error('Failed to initialize tracing:', err);
+    });
 
-startAllProcessors();
+    startAllProcessors();
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -521,11 +523,16 @@ app.use((err, req, res, next) => {
 });
 
 // --- Startup ---
-const httpServer = createServer(app);
-const io = initializeSocketIO(httpServer);
-setSocketIO(io);
+let httpServer;
+let io;
+let server;
 
-const server = httpServer.listen(PORT, async () => {
+if (process.env.NODE_ENV !== 'test') {
+    httpServer = createServer(app);
+    io = initializeSocketIO(httpServer);
+    setSocketIO(io);
+
+    server = httpServer.listen(PORT, async () => {
     logger.info({ port: PORT, env: process.env.NODE_ENV }, `🚀 Server running on http://localhost:${PORT}`);
     logger.info('✅ Monitoring enabled: Logs (Pino), Metrics (Prometheus), Errors (Sentry), Alerts (Custom)');
     logger.info('✅ WebSocket server initialized with Redis adapter for horizontal scaling');
@@ -550,6 +557,7 @@ const server = httpServer.listen(PORT, async () => {
         logger.error({ error }, 'Failed to initialize report scheduler');
     }
 });
+}
 
 let isShuttingDown = false;
 
@@ -614,18 +622,22 @@ const gracefulShutdown = async (signal) => {
     }
 };
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+if (process.env.NODE_ENV !== 'test') {
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-process.on('unhandledRejection', (reason, promise) => {
-    logger.error({ reason, promise }, 'Unhandled Promise Rejection');
-    alertManager.criticalError(new Error('Unhandled Promise Rejection'), { reason });
-    advancedAlertingService.trackErrorRate(reason instanceof Error ? reason : new Error('Unhandled Promise Rejection')).catch(() => {});
-});
+    process.on('unhandledRejection', (reason, promise) => {
+        logger.error({ reason, promise }, 'Unhandled Promise Rejection');
+        alertManager.criticalError(new Error('Unhandled Promise Rejection'), { reason });
+        advancedAlertingService.trackErrorRate(reason instanceof Error ? reason : new Error('Unhandled Promise Rejection')).catch(() => {});
+    });
 
-process.on('uncaughtException', (error) => {
-    logger.fatal({ error }, 'Uncaught Exception');
-    alertManager.criticalError(error, { type: 'uncaughtException' });
-    advancedAlertingService.trackErrorRate(error).catch(() => {});
-    process.exit(1);
-});
+    process.on('uncaughtException', (error) => {
+        logger.fatal({ error }, 'Uncaught Exception');
+        alertManager.criticalError(error, { type: 'uncaughtException' });
+        advancedAlertingService.trackErrorRate(error).catch(() => {});
+        process.exit(1);
+    });
+}
+
+export default app;

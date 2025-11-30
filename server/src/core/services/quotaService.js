@@ -15,10 +15,9 @@ const redis = new Redis({
 });
 
 redis.on('error', (err) => {
-    console.error('Redis connection error:', err);
-    import('./alertingService.js').then(({ advancedAlertingService }) => {
-        advancedAlertingService.checkRedisFailure(err).catch(() => {});
-    }).catch(() => {});
+    if (process.env.NODE_ENV !== 'test') {
+        console.error('Redis connection error:', err);
+    }
 });
 
 let quotaConfig = null;
@@ -122,7 +121,7 @@ export async function checkQuota(organizationId, resource, adminOverride = false
     
     const percentage = (resourceData.current / resourceData.limit) * 100;
     
-    if (percentage >= 80) {
+    if (percentage >= 80 && process.env.NODE_ENV !== 'test') {
         import('./alertingService.js').then(({ advancedAlertingService }) => {
             advancedAlertingService.checkQuotaBreach(
                 organizationId,

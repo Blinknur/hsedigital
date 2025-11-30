@@ -1,6 +1,6 @@
 import express from 'express';
 import { createBullBoard } from 'bull-board';
-import { BullAdapter } from 'bull-board/bullAdapter.js';
+import { BullAdapter } from 'bull-board/dist/queueAdapters/bull.js';
 import { queues } from '../../infrastructure/queue/queues/index.js';
 import { 
     addEmailJob,
@@ -8,7 +8,7 @@ import {
     addDataExportJob,
     addWebhookJob,
     addTenantOnboardingJob
-} from '../jobs/index.js';
+} from '../../infrastructure/queue/jobs/index.js';
 import { logger } from '../../shared/utils/logger.js';
 
 const router = express.Router();

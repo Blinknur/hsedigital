@@ -74,10 +74,12 @@ const prismaClientSingleton = () => {
       status: 'error'
     });
 
-    import('../services/alertingService.js').then(({ advancedAlertingService }) => {
-      const error = new Error(e.message);
-      advancedAlertingService.trackErrorRate(error).catch(() => {});
-    }).catch(() => {});
+    if (process.env.NODE_ENV !== 'test') {
+      import('../../core/services/alertingService.js').then(({ advancedAlertingService }) => {
+        const error = new Error(e.message);
+        advancedAlertingService.trackErrorRate(error).catch(() => {});
+      }).catch(() => {});
+    }
   });
 
   client.$on('warn', (e) => {

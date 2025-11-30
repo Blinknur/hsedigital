@@ -1,7 +1,7 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { withSpan, addSpanAttributes, recordException, addSpanEvent } from '../../shared/utils/tracing.js';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenerativeAI(process.env.API_KEY || 'test-key');
 
 export const generateAIContent = async (prompt, options = {}) => {
     return await withSpan(

@@ -1,5 +1,5 @@
 import express from 'express';
-import { getCurrentRegion, getAllRegions, getRegionForTenant, setTenantRegionPreference } from '../config/multiRegion.js';
+import { getCurrentRegion, getAllRegions, getRegionForTenant, setTenantRegionPreference } from '../../infrastructure/config/multiRegion.js';
 import { replicaManager } from '../../shared/utils/databaseReplicaManager.js';
 import { redisClusterManager } from '../../shared/utils/redisClusterManager.js';
 import { failoverManager } from '../../core/services/failoverManager.js';

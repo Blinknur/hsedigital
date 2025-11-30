@@ -4,7 +4,7 @@ import {
     addDataExportJob,
     addWebhookJob,
     addTenantOnboardingJob
-} from '../jobs/index.js';
+} from '../../infrastructure/queue/jobs/index.js';
 import { logger } from '../../shared/utils/logger.js';
 
 export const queueEmail = async (emailData, options = {}) => {
