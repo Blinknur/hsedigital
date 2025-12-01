@@ -99,12 +99,13 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: e2e-test-results
           path: |
             server/test-results/
             server/*.log
+          if-no-files-found: ignore
 
       - name: Display logs on failure
         if: failure()
