@@ -89,3 +89,7 @@ data/diagnostics/
 # Deployment - Platform-specific
 .railway/
 fly-*.toml.backup
+
+# Docker
+docker-compose.override.yml
+.docker/
