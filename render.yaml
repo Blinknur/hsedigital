@@ -1,0 +1,47 @@
+services:
+  - type: web
+    name: hse-digital-backend
+    env: node
+    region: oregon
+    plan: starter
+    buildCommand: npm install && cd server && npm install && npx prisma generate
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: DATABASE_URL
+        fromDatabase:
+          name: hse-digital-db
+          property: connectionString
+      - key: REDIS_HOST
+        fromService:
+          name: hse-digital-redis
+          type: redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          name: hse-digital-redis
+          type: redis
+          property: port
+      - key: JWT_SECRET
+        generateValue: true
+      - key: REFRESH_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        sync: false
+
+databases:
+  - name: hse-digital-db
+    databaseName: hse_digital
+    plan: starter
+    region: oregon
+    ipAllowList: []
+
+  - name: hse-digital-redis
+    plan: starter
+    region: oregon
+    maxmemoryPolicy: allkeys-lru

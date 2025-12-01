@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
+  "builds": [],
+  "routes": [],
+  "functions": {},
+  "crons": [],
+  "env": {},
+  "public": false,
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "headers": [],
+  "redirects": [],
+  "rewrites": [],
+  "ignoreCommand": "echo '⚠️  DEPLOYMENT BLOCKED: This Node.js backend requires persistent processes for WebSocket connections, background jobs (Bull queue), and Redis pub/sub. Vercel serverless functions cannot support these features. See DEPLOYMENT_PLATFORMS.md for compatible platforms (Railway, Render, DigitalOcean, Fly.io, or AWS/K8s).' && exit 1",
+  "buildCommand": null,
+  "installCommand": null,
+  "devCommand": "npm run dev",
+  "framework": null,
+  "outputDirectory": null
+}

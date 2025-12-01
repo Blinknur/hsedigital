@@ -82,3 +82,10 @@ backup_*.sql
 # Diagnostics
 data/diagnostics/
 *.heapsnapshot
+
+# Deployment - Vercel (not supported, see DEPLOYMENT_PLATFORMS.md)
+.vercel
+
+# Deployment - Platform-specific
+.railway/
+fly-*.toml.backup

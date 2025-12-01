@@ -1,5 +1,10 @@
 # Quick Start Guide
 
+> ⚠️ **Cloud Deployment**: For deploying to cloud platforms (Railway, Render, etc.), see:
+> - [DEPLOYMENT_PLATFORMS.md](../../DEPLOYMENT_PLATFORMS.md) - Platform comparison
+> - [railway-quick-start.md](./railway-quick-start.md) - Deploy to Railway (easiest)
+> - [render-quick-start.md](./render-quick-start.md) - Deploy to Render (production-ready)
+
 ## Initial Setup
 
 ### 1. Install Dependencies

@@ -2,6 +2,8 @@
 
 Comprehensive documentation for the HSE.Digital compliance and safety platform.
 
+> ⚠️ **Important**: This application **cannot be deployed to Vercel** due to WebSocket, background job processing, and persistent connection requirements. See [DEPLOYMENT_PLATFORMS.md](../DEPLOYMENT_PLATFORMS.md) for supported platforms.
+
 ## 📚 Documentation Structure
 
 ### [Architecture](./architecture/)
@@ -21,7 +23,10 @@ API documentation and integration guides
 
 ### [Deployment](./deployment/)
 Deployment guides and operations
-- [Quick Start](./deployment/quick-start.md) - Get started quickly
+- **[Platform Comparison](../DEPLOYMENT_PLATFORMS.md)** - Choose your deployment platform
+- [Railway Quick Start](./deployment/railway-quick-start.md) - Deploy to Railway (easiest)
+- [Render Quick Start](./deployment/render-quick-start.md) - Deploy to Render (production)
+- [Quick Start](./deployment/quick-start.md) - Local development setup
 - [Setup Guide](./deployment/setup-guide.md) - Complete setup instructions
 - [Production Deployment](./deployment/production.md) - Production deployment guide (Kubernetes)
 - [Deployment Runbook](./deployment/runbook.md) - Step-by-step deployment procedures

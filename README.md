@@ -2,6 +2,8 @@
 
 Multi-tenant SaaS platform for managing audits, compliance checklists, incidents, and contractor permits for fuel station networks.
 
+> ⚠️ **Deployment Notice**: This application **cannot be deployed to Vercel** due to WebSocket, background jobs, and persistent connection requirements. See [DEPLOYMENT_PLATFORMS.md](DEPLOYMENT_PLATFORMS.md) for supported platforms (Railway, Render, DigitalOcean, Fly.io, AWS/K8s).
+
 ## 🚀 Quick Start
 
 ### Prerequisites
