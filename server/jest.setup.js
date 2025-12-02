@@ -69,8 +69,13 @@ afterAll(async () => {
 });
 
 afterEach(async () => {
-  const { clearTenantContext } = await import('./src/shared/utils/db.js');
-  clearTenantContext();
+  try {
+    const dbModule = await import('./src/shared/utils/db.js');
+    if (typeof dbModule.clearTenantContext === 'function') {
+      dbModule.clearTenantContext();
+    }
+  } catch (error) {
+  }
 });
 
 export { dbConnectionEstablished };

@@ -1,146 +1,108 @@
+import { describe, it, expect, beforeEach } from '@jest/globals';
 import { setTenantContext, clearTenantContext, getTenantContext } from '../shared/utils/db.js';
 import { tenantLogger } from '../shared/utils/tenantLogger.js';
 
-console.log('=== Tenant Isolation Unit Tests (No DB Required) ===\n');
+describe('Tenant Isolation Unit Tests (No DB Required)', () => {
+  beforeEach(() => {
+    clearTenantContext();
+  });
 
-async function testTenantContextManagement() {
-    console.log('Test 1: Tenant Context Management');
-    
-    const testOrgId = 'test-org-123';
-    
-    setTenantContext(testOrgId);
-    const context1 = getTenantContext();
-    console.log('✓ Set tenant context:', context1 === testOrgId ? 'PASS' : 'FAIL');
-    console.log('  Expected:', testOrgId);
-    console.log('  Got:', context1);
-    
-    const newOrgId = 'test-org-456';
-    setTenantContext(newOrgId);
-    const context2 = getTenantContext();
-    console.log('✓ Update tenant context:', context2 === newOrgId ? 'PASS' : 'FAIL');
-    console.log('  Expected:', newOrgId);
-    console.log('  Got:', context2);
-    
-    clearTenantContext();
-    const context3 = getTenantContext();
-    console.log('✓ Clear tenant context:', context3 === null ? 'PASS' : 'FAIL');
-    console.log('  Expected: null');
-    console.log('  Got:', context3);
-    console.log('');
-}
+  describe('Tenant Context Management', () => {
+    it('should set and get tenant context', () => {
+      const testOrgId = 'test-org-123';
+      setTenantContext(testOrgId);
+      const context = getTenantContext();
+      expect(context).toBe(testOrgId);
+    });
 
-async function testTenantContextIsolation() {
-    console.log('Test 2: Tenant Context Isolation');
-    
-    clearTenantContext();
-    const initialContext = getTenantContext();
-    console.log('✓ Initial context is null:', initialContext === null ? 'PASS' : 'FAIL');
-    
-    setTenantContext('tenant-1');
-    const tenant1Context = getTenantContext();
-    console.log('✓ Tenant 1 context set:', tenant1Context === 'tenant-1' ? 'PASS' : 'FAIL');
-    
-    clearTenantContext();
-    setTenantContext('tenant-2');
-    const tenant2Context = getTenantContext();
-    console.log('✓ Tenant 2 context isolated from tenant 1:', 
-        tenant2Context === 'tenant-2' && tenant2Context !== tenant1Context ? 'PASS' : 'FAIL');
-    
-    clearTenantContext();
-    console.log('');
-}
+    it('should update tenant context', () => {
+      setTenantContext('test-org-123');
+      const newOrgId = 'test-org-456';
+      setTenantContext(newOrgId);
+      const context = getTenantContext();
+      expect(context).toBe(newOrgId);
+    });
 
-async function testTenantLoggerFunctions() {
-    console.log('Test 3: Tenant Logger Functions');
-    
-    let errors = [];
-    
-    try {
+    it('should clear tenant context', () => {
+      setTenantContext('test-org-123');
+      clearTenantContext();
+      const context = getTenantContext();
+      expect(context).toBeNull();
+    });
+  });
+
+  describe('Tenant Context Isolation', () => {
+    it('should start with null context', () => {
+      const initialContext = getTenantContext();
+      expect(initialContext).toBeNull();
+    });
+
+    it('should isolate contexts when switching tenants', () => {
+      setTenantContext('tenant-1');
+      const tenant1Context = getTenantContext();
+      expect(tenant1Context).toBe('tenant-1');
+
+      clearTenantContext();
+      setTenantContext('tenant-2');
+      const tenant2Context = getTenantContext();
+      expect(tenant2Context).toBe('tenant-2');
+      expect(tenant2Context).not.toBe(tenant1Context);
+    });
+  });
+
+  describe('Tenant Logger Functions', () => {
+    it('should execute logTenantSwitch without error', () => {
+      expect(() => {
         tenantLogger.logTenantSwitch('user-1', 'user@example.com', 'org-1', '/api/stations');
-        console.log('✓ logTenantSwitch executes without error: PASS');
-    } catch (error) {
-        errors.push('logTenantSwitch failed');
-        console.log('✗ logTenantSwitch executes without error: FAIL');
-    }
-    
-    try {
+      }).not.toThrow();
+    });
+
+    it('should execute logTenantAccessDenied without error', () => {
+      expect(() => {
         tenantLogger.logTenantAccessDenied('user-1', 'user@example.com', 'Invalid tenant');
-        console.log('✓ logTenantAccessDenied executes without error: PASS');
-    } catch (error) {
-        errors.push('logTenantAccessDenied failed');
-        console.log('✗ logTenantAccessDenied executes without error: FAIL');
-    }
-    
-    try {
+      }).not.toThrow();
+    });
+
+    it('should execute logTenantQueryBlock without error', () => {
+      expect(() => {
         tenantLogger.logTenantQueryBlock('user-1', 'org-1', 'FIND_MANY', 'station');
-        console.log('✓ logTenantQueryBlock executes without error: PASS');
-    } catch (error) {
-        errors.push('logTenantQueryBlock failed');
-        console.log('✗ logTenantQueryBlock executes without error: FAIL');
-    }
-    
-    try {
+      }).not.toThrow();
+    });
+
+    it('should execute logTenantInjection without error', () => {
+      expect(() => {
         tenantLogger.logTenantInjection('org-1', 'CREATE', 'contractor');
-        console.log('✓ logTenantInjection executes without error: PASS');
-    } catch (error) {
-        errors.push('logTenantInjection failed');
-        console.log('✗ logTenantInjection executes without error: FAIL');
-    }
-    
-    console.log('✓ All logger functions work:', errors.length === 0 ? 'PASS' : 'FAIL');
-    if (errors.length > 0) {
-        console.log('  Errors:', errors.join(', '));
-    }
-    console.log('');
-}
+      }).not.toThrow();
+    });
+  });
 
-async function testGlobalContextBehavior() {
-    console.log('Test 4: Global Context Behavior');
-    
-    clearTenantContext();
-    
-    console.log('✓ Global context can be cleared multiple times:', 
-        getTenantContext() === null ? 'PASS' : 'FAIL');
-    
-    setTenantContext('org-1');
-    setTenantContext('org-2');
-    const finalContext = getTenantContext();
-    console.log('✓ Last set wins for global context:', 
-        finalContext === 'org-2' ? 'PASS' : 'FAIL');
-    
-    clearTenantContext();
-    console.log('');
-}
+  describe('Global Context Behavior', () => {
+    it('should handle multiple clears gracefully', () => {
+      clearTenantContext();
+      clearTenantContext();
+      const context = getTenantContext();
+      expect(context).toBeNull();
+    });
 
-async function testNullAndUndefinedHandling() {
-    console.log('Test 5: Null and Undefined Handling');
-    
-    setTenantContext(null);
-    const nullContext = getTenantContext();
-    console.log('✓ Can set null context:', nullContext === null ? 'PASS' : 'FAIL');
-    
-    setTenantContext(undefined);
-    const undefinedContext = getTenantContext();
-    console.log('✓ Undefined is treated as null:', undefinedContext === undefined ? 'PASS' : 'FAIL');
-    
-    clearTenantContext();
-    console.log('');
-}
+    it('should use last set value', () => {
+      setTenantContext('org-1');
+      setTenantContext('org-2');
+      const finalContext = getTenantContext();
+      expect(finalContext).toBe('org-2');
+    });
+  });
 
-async function runAllTests() {
-    try {
-        await testTenantContextManagement();
-        await testTenantContextIsolation();
-        await testTenantLoggerFunctions();
-        await testGlobalContextBehavior();
-        await testNullAndUndefinedHandling();
-        
-        console.log('=== All Unit Tests Completed Successfully ===');
-        process.exit(0);
-    } catch (error) {
-        console.error('Test failed:', error);
-        process.exit(1);
-    }
-}
+  describe('Null and Undefined Handling', () => {
+    it('should handle null context', () => {
+      setTenantContext(null);
+      const context = getTenantContext();
+      expect(context).toBeNull();
+    });
 
-runAllTests();
+    it('should handle undefined context', () => {
+      setTenantContext(undefined);
+      const context = getTenantContext();
+      expect(context).toBeUndefined();
+    });
+  });
+});

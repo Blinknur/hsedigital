@@ -76,11 +76,19 @@ describe('Advanced Features Regression Tests', () => {
   });
 
   afterAll(async () => {
-    await prisma.station.deleteMany({ where: { organizationId: testOrg.id } });
-    await prisma.user.deleteMany({ where: { organizationId: testOrg.id } });
-    await prisma.organization.delete({ where: { id: testOrg.id } }).catch(() => {});
-    await prisma.$disconnect();
-    await redis.quit();
+    try {
+      if (testOrg?.id) {
+        await prisma.station.deleteMany({ where: { organizationId: testOrg.id } });
+        await prisma.user.deleteMany({ where: { organizationId: testOrg.id } });
+        await prisma.organization.delete({ where: { id: testOrg.id } }).catch(() => {});
+      }
+      await prisma.$disconnect();
+    } catch (error) {
+    }
+    try {
+      await redis.quit();
+    } catch (error) {
+    }
   });
 
   describe('Stripe Billing Integration', () => {
